@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   DownloadSimple,
@@ -18,6 +18,8 @@ import { Dialog } from "./Dialog";
 import { isActiveRun, localDate } from "./model";
 import { Markdown } from "./Markdown";
 import { ConceptContext } from "./ConceptContext";
+import { latestDailyRun, dailyFailureTitle } from "./daily-run";
+import { RunRetryNotice, type RunRetry } from "./RunRetryNotice";
 export function ImportPanel({
   kind,
   onClose,
@@ -431,14 +433,16 @@ export function RuntimePanel({
 }
 export function ReportPage({
   state,
+  retries,
   onReturn,
   onError,
   onGenerate,
 }: {
   state: BookState;
+  retries?: Record<string, RunRetry>;
   onReturn: () => void;
   onError: (message: string) => void;
-  onGenerate: (date: string, timezone: string) => Promise<void>;
+  onGenerate: (date: string, timezone: string) => Promise<{ runId: string }>;
 }) {
   const [timezone, setTimezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
@@ -446,9 +450,56 @@ export function ReportPage({
   const [date, setDate] = useState(() => localDate(timezone));
   const [report, setReport] = useState<DailyReport | null>(null);
   const [loading, setLoading] = useState(false);
-  const active = state.runs.some(
-    (run) => run.purpose === "daily" && isActiveRun(run),
+  const [attempts, setAttempts] = useState<
+    Record<string, { runId?: string; error?: string; submitting: boolean }>
+  >({});
+  const inFlight = useRef(new Set<string>());
+  const [generationRevision, setGenerationRevision] = useState(0);
+  const targetKey = JSON.stringify([state.book.id, date, timezone]);
+  const attempt = attempts[targetKey];
+  const latest = latestDailyRun(
+    state.runs,
+    state.book.id,
+    date,
+    timezone,
+    attempt?.runId,
   );
+  const active = !!attempt?.submitting || !!(latest && isActiveRun(latest));
+  const failed =
+    !active &&
+    !!(
+      attempt?.error ||
+      (latest && ["failed", "interrupted", "cancelled"].includes(latest.status))
+    );
+  const failureMessage =
+    attempt?.error ||
+    latest?.error ||
+    "这次运行没有完成。已保存的阅读记录仍保留，可以重新生成。";
+  async function generate() {
+    if (inFlight.current.has(targetKey) || active) return;
+    const key = targetKey;
+    inFlight.current.add(key);
+    setAttempts((previous) => ({ ...previous, [key]: { submitting: true } }));
+    try {
+      const result = await onGenerate(date, timezone);
+      setAttempts((previous) => ({
+        ...previous,
+        [key]: { runId: result.runId, submitting: false },
+      }));
+      setGenerationRevision((value) => value + 1);
+    } catch (error) {
+      setAttempts((previous) => ({
+        ...previous,
+        [key]: {
+          submitting: false,
+          error:
+            error instanceof Error ? error.message : "请求未完成，请重试。",
+        },
+      }));
+    } finally {
+      inFlight.current.delete(key);
+    }
+  }
   const stamp = state.runs
     .filter((run) => run.purpose === "daily")
     .map((run) => `${run.id}:${run.status}`)
@@ -456,6 +507,13 @@ export function ReportPage({
   useEffect(() => {
     let disposed = false;
     setLoading(true);
+    setReport((previous) =>
+      previous?.book.id === state.book.id &&
+      previous.date === date &&
+      previous.timezone === timezone
+        ? previous
+        : null,
+    );
     void api
       .report(state.book.id, date, timezone)
       .then((value) => {
@@ -470,7 +528,7 @@ export function ReportPage({
     return () => {
       disposed = true;
     };
-  }, [state.book.id, date, timezone, stamp]);
+  }, [state.book.id, date, timezone, stamp, generationRevision]);
   return (
     <main className="summary-page">
       <div className="summary-heading">
@@ -597,10 +655,28 @@ export function ReportPage({
               03 <span>总结与下一步</span>
             </div>
             <div>
+              {failed && (
+                <div className="product-daily-failure" role="alert">
+                  <strong>
+                    {dailyFailureTitle(
+                      attempt?.error ? undefined : latest?.status,
+                    )}
+                  </strong>
+                  <p>{failureMessage}</p>
+                  {report.advice && (
+                    <small>上次成功生成的总结仍保留在下方。</small>
+                  )}
+                </div>
+              )}
+              {active && latest && (
+                <RunRetryNotice retry={retries?.[latest.id]} />
+              )}
               <Markdown
                 text={
                   report.advice ||
-                  "根据当天的阅读和已确认小结，生成回顾与建议。"
+                  (failed
+                    ? "尚未生成新的 AI 总结，阅读记录和已确认的小结仍保留。"
+                    : "根据当天的阅读和已确认小结，生成回顾与建议。")
                 }
               />
               <button
@@ -609,9 +685,13 @@ export function ReportPage({
                   active ||
                   (!report.activities.length && !report.summaries.length)
                 }
-                onClick={() => void onGenerate(date, timezone)}
+                onClick={() => void generate()}
               >
-                {active ? "正在生成总结…" : "生成总结与建议"}
+                {active
+                  ? "正在生成总结…"
+                  : failed
+                    ? "重试生成总结"
+                    : "生成总结与建议"}
               </button>
             </div>
           </section>

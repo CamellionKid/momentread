@@ -520,6 +520,7 @@ export default function App() {
             </section>
             <DiscussionPane
               state={state}
+              retries={model.retries}
               node={node}
               saveStatus={model.saveStatus}
               onDraft={(id, draft) => model.edit(id, { draft })}
@@ -573,14 +574,18 @@ export default function App() {
       {screen === "report" && state && (
         <ReportPage
           state={state}
+          retries={model.retries}
           onReturn={() => setScreen("reader")}
           onError={fail}
           onGenerate={async (date, timezone) => {
-            await runAction(async () => {
-              await model.flush();
-              await api.generateReport(state.book.id, date, timezone);
-              await model.refresh();
-            });
+            await model.flush();
+            const result = await api.generateReport(
+              state.book.id,
+              date,
+              timezone,
+            );
+            await model.refresh();
+            return result;
           }}
         />
       )}

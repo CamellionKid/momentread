@@ -2,7 +2,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BookState } from "../../shared/contracts";
+import type { BookState, RunEvent } from "../../shared/contracts";
 import { api } from "../../src/api";
 import { useWorkspace } from "../../src/product/useWorkspace";
 vi.mock("../../src/api", () => ({
@@ -106,8 +106,100 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 describe("product workspace save and response ownership", () => {
+  it("consumes retry SSE updates in sequence, ignores another book, and clears feedback when output resumes or the run finishes", async () => {
+    class Stream {
+      static instances: Stream[] = [];
+      listeners = new Map<string, (event: Event) => void>();
+      closed = false;
+      constructor(public url: string) {
+        Stream.instances.push(this);
+      }
+      addEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.set(type, listener);
+      }
+      close() {
+        this.closed = true;
+      }
+      emit(event: RunEvent) {
+        this.listeners.get("run")?.(
+          new MessageEvent("run", { data: JSON.stringify(event) }),
+        );
+      }
+    }
+    vi.stubGlobal("EventSource", Stream);
+    const active = state();
+    active.runs = [
+      {
+        id: "run-a",
+        bookId: "book-a",
+        discussionId: "book-a-root",
+        purpose: "discussion",
+        status: "running",
+        contextSnapshotId: "context-a",
+        sessionId: null,
+        sessionReusable: false,
+        partialText: "",
+        result: null,
+        error: null,
+        createdAt: date,
+        updatedAt: date,
+      },
+    ];
+    vi.mocked(api.state).mockResolvedValue(active);
+    await act(async () => {
+      await model.open("book-a");
+    });
+    const stream = Stream.instances.at(-1)!;
+    const packet = (
+      seq: number,
+      type: RunEvent["type"] = "retrying",
+    ): RunEvent => ({
+      runId: "run-a",
+      bookId: "book-a",
+      discussionId: "book-a-root",
+      seq,
+      type,
+      data: {
+        attempt: seq,
+        maxRetries: 10,
+        delayMs: 3000,
+        errorCategory: "rate_limit",
+        status: 429,
+      },
+      createdAt: date,
+    });
+    await act(async () => {
+      stream.emit(packet(1));
+      stream.emit(packet(2));
+    });
+    expect(model.retries["run-a"]?.attempt).toBe(2);
+    expect(model.retries["run-a"]?.errorCategory).toBe("rate_limit");
+    await act(async () => {
+      stream.emit({ ...packet(9), bookId: "book-b" });
+    });
+    expect(model.retries["run-a"]?.attempt).toBe(2);
+    await act(async () => {
+      stream.emit(packet(3, "text_delta"));
+      stream.emit(packet(2));
+    });
+    expect(model.retries["run-a"]).toBeUndefined();
+    await act(async () => {
+      stream.emit(packet(4));
+    });
+    expect(model.retries["run-a"]?.attempt).toBe(4);
+    vi.mocked(api.state).mockResolvedValue({
+      ...active,
+      runs: [{ ...active.runs[0], status: "failed", error: "稍后重试" }],
+    });
+    await act(async () => {
+      stream.emit(packet(5, "failed"));
+    });
+    expect(model.retries["run-a"]).toBeUndefined();
+    expect(stream.closed).toBe(true);
+  });
   it("flushes a sibling draft before activating another discussion", async () => {
     await act(async () => {
       await model.open("book-a");

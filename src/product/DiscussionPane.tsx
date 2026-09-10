@@ -22,6 +22,7 @@ import {
   selectedMessageOrigin,
 } from "./model";
 import { Markdown } from "./Markdown";
+import { RunRetryNotice, type RunRetry } from "./RunRetryNotice";
 export type BranchSelection = {
   visibleText: string;
   parentId: string;
@@ -31,6 +32,7 @@ interface Props {
   state: BookState;
   node: Discussion | null;
   saveStatus: string;
+  retries?: Record<string, RunRetry>;
   onDraft: (id: string, text: string) => void;
   onScroll: (id: string, scrollTop: number) => void;
   onSend: () => void;
@@ -56,6 +58,9 @@ export function DiscussionPane(props: Props) {
   const [selectionError, setSelectionError] = useState("");
   const path = ancestry(state.discussions, node?.id ?? null);
   const messages = state.messages.filter((m) => m.discussionId === node?.id);
+  const hasCompleteAnswer = messages.some(
+    (m) => m.role === "assistant" && m.status === "complete",
+  );
   const activeRun = state.runs
     .filter((r) => r.discussionId === node?.id && isActiveRun(r))
     .at(-1);
@@ -334,6 +339,7 @@ export function DiscussionPane(props: Props) {
         {activeRun && (
           <div className="product-run-status" role="status">
             <span className="generating">{runLabel(activeRun)}…</span>
+            <RunRetryNotice retry={props.retries?.[activeRun.id]} />
             {activeRun.purpose === "discussion" && activeRun.partialText && (
               <div className="product-message-text">
                 <Markdown text={activeRun.partialText} />
@@ -352,7 +358,13 @@ export function DiscussionPane(props: Props) {
           ["failed", "interrupted", "cancelled"].includes(lastRun.status) && (
             <div className="notice product-run-error" role="status">
               <p>{lastRun.error || "这次生成未完成，已保存的内容仍保留。"}</p>
-              <small>可以在下方重新提问，或重新整理。</small>
+              <small>
+                {activeRun
+                  ? "当前生成完成后，可以继续提问。"
+                  : hasCompleteAnswer
+                    ? "可以在下方重新提问，或重新整理已有完整回答。"
+                    : "可以在下方重新提问；获得完整回答后再整理。"}
+              </small>
             </div>
           )}
         {!messages.length && !activeRun && (
@@ -389,12 +401,7 @@ export function DiscussionPane(props: Props) {
           </div>
           <button
             className="outline return-button"
-            disabled={
-              !!activeRun ||
-              !messages.some(
-                (m) => m.role === "assistant" && m.status === "complete",
-              )
-            }
+            disabled={!!activeRun || !hasCompleteAnswer}
             onClick={props.onSummary}
           >
             {node.parentId ? "整理并返回" : "整理这段"}

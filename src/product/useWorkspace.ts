@@ -7,6 +7,7 @@ import type {
   Workspace,
 } from "../../shared/contracts";
 import { isActiveRun } from "./model";
+import { readRunRetry, type RunRetry } from "./RunRetryNotice";
 export interface PendingPermission {
   runId: string;
   discussionId: string;
@@ -23,6 +24,8 @@ export function useWorkspace(onError: (message: string) => void) {
     "saved",
   );
   const [permissions, setPermissions] = useState<PendingPermission[]>([]);
+  const [retries, setRetries] = useState<Record<string, RunRetry>>({});
+  const retrySequences = useRef(new Map<string, number>());
   const currentBook = useRef<string | null>(null);
   const requestSeq = useRef(0);
   const dirty = useRef(
@@ -112,6 +115,8 @@ export function useWorkspace(onError: (message: string) => void) {
       currentBook.current = id;
       workspaceDirty.current = {};
       setPermissions([]);
+      setRetries({});
+      retrySequences.current.clear();
       try {
         const next = await api.state(id);
         if (seq === requestSeq.current && currentBook.current === id) {
@@ -240,8 +245,16 @@ export function useWorkspace(onError: (message: string) => void) {
     return () => clearInterval(timer);
   }, [runIds, refresh]);
   useEffect(() => {
+    let disposed = false;
     setPermissions((previous) =>
       previous.filter((p) => runIds.split(",").includes(p.runId)),
+    );
+    setRetries((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([id]) =>
+          runIds.split(",").includes(id),
+        ),
+      ),
     );
     const streams = runIds
       ? runIds.split(",").map((id) => {
@@ -249,7 +262,33 @@ export function useWorkspace(onError: (message: string) => void) {
           const consume = (raw: Event) => {
             try {
               const event = JSON.parse((raw as MessageEvent).data) as RunEvent;
-              if (event.runId !== id) return;
+              if (
+                disposed ||
+                event.runId !== id ||
+                event.bookId !== currentBook.current
+              )
+                return;
+              if (
+                [
+                  "retrying",
+                  "text_delta",
+                  "completed",
+                  "failed",
+                  "cancelled",
+                ].includes(event.type) &&
+                Number.isInteger(event.seq) &&
+                event.seq > (retrySequences.current.get(id) ?? -1)
+              ) {
+                retrySequences.current.set(id, event.seq);
+                const retry = readRunRetry(event);
+                setRetries((previous) => {
+                  if (retry) return { ...previous, [id]: retry };
+                  if (!previous[id]) return previous;
+                  const next = { ...previous };
+                  delete next[id];
+                  return next;
+                });
+              }
               if (event.type === "permission_required") {
                 const item: PendingPermission = {
                   runId: id,
@@ -283,6 +322,7 @@ export function useWorkspace(onError: (message: string) => void) {
             "run",
             "initialized",
             "text_delta",
+            "retrying",
             "permission_required",
             "permission_resolved",
             "completed",
@@ -293,7 +333,10 @@ export function useWorkspace(onError: (message: string) => void) {
           return stream;
         })
       : [];
-    return () => streams.forEach((stream) => stream.close());
+    return () => {
+      disposed = true;
+      streams.forEach((stream) => stream.close());
+    };
   }, [runIds, refresh]);
   return {
     state,
@@ -308,5 +351,6 @@ export function useWorkspace(onError: (message: string) => void) {
     flush,
     saveStatus,
     permissions,
+    retries,
   };
 }

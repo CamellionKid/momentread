@@ -1030,3 +1030,33 @@
     grid-column: 1;
   }
 }
+.product-daily-failure {
+  border: 1px solid #685047;
+  border-radius: 6px;
+  padding: 15px 17px;
+  margin: 0 0 22px;
+  background: #2d2622;
+  color: #e4c1b4;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.product-daily-failure strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.product-daily-failure p {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.product-daily-failure small {
+  display: block;
+  margin-top: 7px;
+  color: #bcaa9f;
+}
+.product-retry-notice {
+  color: #d3bd9b;
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
