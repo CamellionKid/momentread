@@ -1,6 +1,6 @@
 # Claude Code 适配与实测记录
 
-状态：**基础调用、会话隔离、结构化结果和权限往返已实测；本机 provider 的公开网络工具未通过。** 不能以本记录宣称原著检索已可用。
+状态：**用户处理额度后，13:39–13:42 UTC 的真实 first、明确 resume 和固定 URL WebFetch 已通过；WebSearch 只返回空结果，公开搜索验收仍未通过。** 历史额度故障保留在下文，不能用工具未报错代替返回有效搜索结果。
 
 核查日期：2026-09-10。实际 CLI：`2.1.261 (Claude Code)`。证据时间下表使用 UTC。所有输入均为合成短文本或公开网站地址，没有向协议测试提供用户书籍内容。
 
@@ -29,12 +29,12 @@
 | text_delta | `text`；UTF-8 用 StringDecoder，完整 assistant 快照不重复追加 |
 | permission_required | `requestId/toolName/input/description` |
 | permission_resolved | `requestId/toolName/decision`；过期或重复回答返回 409 |
-| retrying | `attempt/maxRetries/delayMs`，不输出凭据或原始 provider 错误 |
+| retrying | `attempt/maxRetries/delayMs`，附 allowlist `errorCategory` 和可选 HTTP `status`；不输出凭据或原始 provider 错误 |
 | completed | `text/structuredOutput?/sessionReusable:true/toolResults` |
 | cancelled | `text/sessionReusable:false/forced` |
-| failed | `code/message/sessionReusable:false` |
+| failed | `code/message/sessionReusable:false`；已识别的服务故障附 `errorCategory/status?` |
 
-`toolResults` 是由实际 `tool_use`／`tool_result` 关联得到的元数据数组：`{toolName,toolUseId,success,errorCode?}`。它不是模型自报的工具状态。**completed 仅说明模型运行完成；网络工具可能失败。匹配服务必须检查 toolResults，并独立取回来源正文，不能把模型凭记忆给出的 URL 或 WebFetch 的模型提取当作原文。**
+`toolResults` 是由实际 `tool_use`／`tool_result` 关联得到的元数据数组：`{toolName,toolUseId,success,errorCode?,resultCount?}`。success 仅表示工具未返回 is_error。WebSearch 的 resultCount 只统计已识别结果正文中明确返回的链接，排除 query 标题和 REMINDER；无法识别的格式不返回计数。它不是模型自报的工具状态。**completed 仅说明模型运行完成；网络工具可能失败或返回零结果。匹配服务须独立取回来源正文，不能把模型凭记忆给出的 URL 或 WebFetch 的模型提取当作原文。**
 
 stderr 不转发原始文本或分块内容，仅向可选 logger 报告已隐藏的字节数量，避免凭据跨块时漏过过滤。其他诊断经过凭据、URL、用户路径过滤并截断；界面接收固定的可操作错误文案。
 
@@ -64,7 +64,7 @@ npm exec tsx -- scripts/claude-probe.ts --live fetch
 npm exec tsx -- scripts/claude-probe.ts --live deny
 ```
 
-脚本每次创建隔离临时 cwd；只打印脱敏状态与合成输出。matching 用例只有实际工具结果成功才返回退出码 0；拒绝用例单独验证拒绝路径。取消用例在首个输出或初始化后 4 秒触发，最长 120 秒运行期限。
+脚本每次创建隔离临时 cwd；只打印脱敏状态与合成输出。matching 用例要求实际工具未报错，search 还必须观察到 WebSearch 明确返回至少一个结果链接，否则退出码为 1；拒绝用例单独验证拒绝路径。取消用例在首个输出或初始化后 4 秒触发，最长 120 秒运行期限。
 
 | 实测 | UTC 时间／运行 ID | 结果 |
 |---|---|---|
@@ -80,6 +80,37 @@ npm exec tsx -- scripts/claude-probe.ts --live deny
 首次隔离试运行曾出现 `authReported=true` 而实际 Not logged in：原因是可用 provider 连接配置来自用户 Claude settings.env，空 setting sources 没有加载它。提取上述白名单后首次调用通过；没有更改用户配置或登录状态。
 
 网络工具失败不阻塞普通讨论、明确接续、整理和权限拒绝的本地开发，但阻止“自动原著检索已验证可用”的放行。需要可用的 Claude 网络工具配置，或经总负责人审定的公开检索实现，再进行真实复验。未无限重试，也未自动改用其他 AI 供应商。
+
+## 后续集成故障复诊：5 小时额度已耗尽
+
+2026-09-10 后续系统验收出现新的外部阻塞，不能沿用上午的成功结果宣称当前 AI 可用：
+
+- 实际接续运行 `9d0e63d4-3e27-430d-880a-94183dd81342` 在 `10:29:39.286Z` 开始，经过 CLI 内部重试后于 `10:32:46.081Z` 失败。
+- 仅读取这个运行对应的明确会话 `765e7174-ed21-4776-8416-47910baf4448`，其 `10:32:45.999Z` 的 CLI 系统错误带 `error=rate_limit`、`isApiErrorMessage=true`；服务返回 **HTTP 429，5-hour usage quota 已耗尽**。
+- 服务提示恢复时间为 **2026-09-10 21:06:28 +0800**。这是服务当时给出的时间，不保证额度恢复后的下一次请求一定成功；恢复后仍须真实复测。
+- H 独立盲测的合成 first 运行 `f1ac2b39-4d19-4e64-8104-82f85f65e174` 于 `10:34:26Z` 初始化，重试至第 9 次，在 `10:36:26Z` 到达 120 秒期限。它使用旧版事件字段，未保留服务错误类别，因此只记为重试后超时；不能把超时本身当成独立的 429 证据。复诊复用这次已有测试，没有额外发送模型请求。
+- 既有配置来源仍是 Claude settings.env 的认证／endpoint／模型白名单，进程环境没有同名连接配置。先前成功探针与 H 失败探针的 initialized.model 均为 `claude-opus-4-8[1m]`，没有观察到请求模型切换。目标会话先前成功 assistant 的 provider 返回 model 为 `glm-5.3`，错误消息为 `<synthetic>`；CLI 请求别名不能证明实际底层模型身份。
+
+处理方式：等待现有服务额度恢复，再使用相同配置复测 first、服务重启后的明确 resume 和完整阅读流程。没有修改账户、认证、provider 或模型映射，也没有充值、购买、额度重置或无限重试。
+
+本次代码修正保留安全的服务错误分类：429、认证拒绝、访问拒绝、模型不可用、5xx、无响应等对应固定文案。达到应用超时前若已知服务错误类别，终态保留该类别。带 `assistant.error`／`isApiErrorMessage` 的 CLI 系统错误不再追加为普通 AI 正文；仅从额度错误中提取严格的数字恢复时间，原始错误文本、内部地址、凭据和请求标识不进入界面。自动化用协议 fixture 验证该修正，没有把 fixture 结果冒充额度恢复后的真实成功。
+
+## 用户处理额度后的真实复验
+
+用户明确额度已处理后，保持既有 provider／模型配置，执行了有界复验；没有改写全局设置、再次登录或购买额度。
+
+| 用例 | UTC 时间／运行 ID | 实际结果 |
+|---|---|---|
+| first | 13:39:30–31，`b2adc39f-5fb7-4482-b453-c5530f27822b` | **通过**；中文逐字断言及流式合并断言成功，无 retry，清洁退出 |
+| 明确 resume | 13:40:05–08，`4a7fe902-b1ee-416c-b518-7685ea471643` → `98b1c761-476f-4bb4-a197-b17659c954a1` | **通过**；相同 session `87234f80-2814-480e-84b6-9f87665733a1`，准确取回合成 marker |
+| WebSearch | 13:40:05–12，`bfbc3dd5-2c10-4e29-ba6e-9514154a2838` | **未通过搜索结果验收**；允许本次权限后工具未报错，但真实返回仅含查询标题、空白正文及 REMINDER，零来源链接 |
+| WebFetch | 13:42:35–43，`a1d16d7a-3e30-45dc-aae8-7d3e70186d45` | **固定 URL 工具调用通过**；实际 WebFetch result success=true，模型报告 Gutenberg 页标题。独立正文取回／引句核对仍由匹配模块另行验收 |
+
+CLI initialized.model 均为 `claude-opus-4-8[1m]`；此次 first 和 search 明确任务会话中的 assistant provider 返回 model 字段为 `glm-5.3-flash`。两者分别是 CLI 请求标识与 provider 自报标识，不据此保证实际底层模型身份。
+
+WebSearch 这次没有复现早先 403，不能继续把当前失败归因为 403，也不能仅凭一次空查询认定 provider 永久不支持搜索。观察事实是：同一配置的普通推理和固定 URL 取回恢复，公开搜索没有给出本次查询的有效结果。没有为寻找成功截图而重复搜索或切换供应商。
+
+复验原始日志位于本机忽略目录 `tmp/claude-recovery/`。首次 search 探针当时只检查 is_error，退出码 0 曾造成过宽的成功判定；已修正探针，新增 resultCount 和 query／REMINDER 排除测试。对该真实工具结果离线重放得到 `transportSuccess=true/resultCount=0/searchAcceptancePassed=false`，未额外发起模型调用。22 项 Claude 协议测试及全仓类型检查通过；这不代替完整系统与盲测验收。
 
 ## 来源
 

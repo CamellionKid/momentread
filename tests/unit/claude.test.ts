@@ -3,7 +3,7 @@ import {mkdtemp, writeFile, chmod, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {JsonLineDecoder, TextAccumulator, redactDiagnostic} from '../../server/ai/protocol';
+import {JsonLineDecoder, TextAccumulator, redactDiagnostic, classifyCliFailure, webSearchResultCount} from '../../server/ai/protocol';
 import {claudeArguments, createClaudeAdapter} from '../../server/ai/index';
 import type {StartRun} from '../../shared/contracts/ports';
 import type {RunEvent} from '../../shared/contracts/index';
@@ -52,6 +52,22 @@ describe('Claude NDJSON protocol', () => {
   it('redacts credentials, endpoint query strings, and personal paths', () => {
     const redacted = redactDiagnostic('token=very-secret Bearer abc123 /Users/person/.claude/config https://host?key=secret sk-ant-very-secret');
     expect(redacted).not.toContain('very-secret'); expect(redacted).not.toContain('person'); expect(redacted).not.toContain('host'); expect(redacted).not.toContain('abc123');
+  });
+  it('classifies quota errors with a strict reset timestamp, not raw provider prose', () => {
+    const failure = classifyCliFailure('rate_limit', undefined, 'API Error: Request rejected (429) · You have exceeded the 5-hour usage quota. It will reset at 2026-09-10 21:06:28 +0800 CST. token=secret https://private?key=secret');
+    expect(failure).toMatchObject({code: 'CLI_RATE_LIMIT', errorCategory: 'rate_limit', status: 429});
+    expect(failure.message).toContain('2026-09-10 21:06:28 +0800');
+    expect(JSON.stringify(failure)).not.toContain('secret'); expect(JSON.stringify(failure)).not.toContain('private');
+    expect(classifyCliFailure('token=secret', 401)).toMatchObject({code: 'CLI_AUTH_REQUIRED', errorCategory: 'authentication_failed'});
+    expect(classifyCliFailure('token=secret', undefined)).toMatchObject({code: 'CLI_RUN_FAILED', errorCategory: 'unknown'});
+  });
+  it('counts explicit search result links, excluding query URLs and reminder links', () => {
+    const query = 'https://query.example/path';
+    const header = `Web search results for query: "${query}"\n\n`;
+    expect(webSearchResultCount(header + '\nREMINDER: cite [help](https://reminder.example)', query)).toBe(0);
+    expect(webSearchResultCount(header + 'Links: [{"title":"Book","url":"https://source.example/book"}]\n[Book](https://source.example/book)\n[Second](https://source.example/second)\nREMINDER: cite sources', query)).toBe(2);
+    expect(webSearchResultCount('Unsupported response with https://random.example')).toBeUndefined();
+    expect(webSearchResultCount([{type: 'text', text: header + 'Links: [{"url":"https://source.example/book"}]'}], query)).toBe(1);
   });
 });
 
@@ -150,6 +166,46 @@ describe('Claude process policy', () => {
       const handle = await adapter.start(request()); const events: RunEvent[] = [];
       for await (const event of handle.events) events.push(event);
       expect(events.at(-1)).toMatchObject({type: 'failed', data: {code: 'CLI_TIMEOUT', sessionReusable: false}});
+    } finally { await fake.cleanup(); }
+  });
+  it('does not emit synthetic CLI API errors as assistant text and classifies retries safely', async () => {
+    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:500,error:'rate_limit',error_status:429}));console.log(JSON.stringify({type:'assistant',error:'rate_limit',isApiErrorMessage:true,message:{id:'synthetic',content:[{type:'text',text:'API Error: Request rejected (429). It will reset at 2026-09-10 21:06:28 +0800 CST. token=secret https://internal?key=secret'}]}}));console.log(JSON.stringify({type:'result',subtype:'error_during_execution',is_error:true,result:'secret'}));process.stdin.on('end',()=>process.exit(0));}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const handle = await adapter.start(request()); const events: RunEvent[] = [];
+      for await (const event of handle.events) events.push(event);
+      expect(events.some(event => event.type === 'text_delta')).toBe(false);
+      expect(events.find(event => event.type === 'retrying')).toMatchObject({data: {errorCategory: 'rate_limit', status: 429}});
+      expect(events.at(-1)).toMatchObject({type: 'failed', data: {code: 'CLI_RATE_LIMIT', errorCategory: 'rate_limit', status: 429, sessionReusable: false}});
+      expect(JSON.stringify(events)).not.toContain('secret'); expect(JSON.stringify(events)).not.toContain('internal');
+    } finally { await fake.cleanup(); }
+  });
+  it('allows recovery after a retry and does not classify ordinary quoted error text', async () => {
+    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:1,error:'server_error',error_status:500}));console.log(JSON.stringify({type:'assistant',message:{id:'normal',content:[{type:'text',text:'Example: API Error: 429 is an error label.'}]}}));${result}}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const handle = await adapter.start(request()); const events: RunEvent[] = [];
+      for await (const event of handle.events) events.push(event);
+      expect(events.find(event => event.type === 'text_delta')).toMatchObject({data: {text: 'Example: API Error: 429 is an error label.'}});
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {sessionReusable: true}});
+    } finally { await fake.cleanup(); }
+  });
+  it('retains a known service error category when the application deadline interrupts retries', async () => {
+    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:5000,error:'rate_limit',error_status:429}));}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 1000, shutdownGraceMs: 100});
+      const handle = await adapter.start(request()); const events: RunEvent[] = [];
+      for await (const event of handle.events) events.push(event);
+      expect(events.at(-1)).toMatchObject({type: 'failed', data: {code: 'CLI_RATE_LIMIT', errorCategory: 'rate_limit', status: 429, sessionReusable: false}});
+    } finally { await fake.cleanup(); }
+  });
+  it('reports a completed but empty WebSearch as zero result links', async () => {
+    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'assistant',message:{id:'search',content:[{type:'tool_use',id:'search-1',name:'WebSearch',input:{query:'https://query.example'}}]}}));console.log(JSON.stringify({type:'user',message:{content:[{type:'tool_result',tool_use_id:'search-1',content:'Web search results for query: "https://query.example"\\n\\n\\nREMINDER: include sources.'}]}}));${result}}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const handle = await adapter.start(request('matching')); const events: RunEvent[] = [];
+      for await (const event of handle.events) events.push(event);
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {toolResults: [{toolName: 'WebSearch', success: true, resultCount: 0}]}});
     } finally { await fake.cleanup(); }
   });
 });

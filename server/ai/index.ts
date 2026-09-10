@@ -11,7 +11,7 @@ import {join, delimiter, isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AppError, now, type RunEvent} from '../../shared/contracts/index';
 import type {ClaudeAdapter, StartRun, RuntimeProbe} from '../../shared/contracts/ports';
-import {AsyncQueue, JsonLineDecoder, TextAccumulator, redactDiagnostic} from './protocol';
+import {AsyncQueue, JsonLineDecoder, TextAccumulator, redactDiagnostic, classifyCliFailure, webSearchResultCount, type CliFailure} from './protocol';
 
 export interface ClaudeAdapterOptions {
   dataDir?: string;
@@ -28,8 +28,9 @@ type Active = {
   request: StartRun; proc: ChildProcessWithoutNullStreams; queue: AsyncQueue<RunEvent>;
   seq: number; permissions: Map<string, PendingPermission>; text: TextAccumulator;
   cancelled: boolean; forced: boolean; closed: boolean; failure?: {code: string; message: string};
+  apiFailure?: CliFailure; lastRetry?: CliFailure;
   result?: Record<string, any>; sessionId?: string; closePromise: Promise<void>; resolveClose: () => void;
-  toolCalls: Map<string, string>; toolResults: Array<{toolName: string; toolUseId: string; success: boolean; errorCode?: string}>;
+  toolCalls: Map<string, string>; toolQueries: Map<string, string>; toolResults: Array<{toolName: string; toolUseId: string; success: boolean; errorCode?: string; resultCount?: number}>;
   timer?: ReturnType<typeof setTimeout>; killTimer?: ReturnType<typeof setTimeout>; finishTimer?: ReturnType<typeof setTimeout>;
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -105,11 +106,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
     clearTimeout(state.timer); clearTimeout(state.killTimer); clearTimeout(state.finishTimer);
     if (state.cancelled) emit(state, 'cancelled', {text: state.text.text, sessionReusable: false, forced: state.forced});
     else if (state.failure) emit(state, 'failed', {...state.failure, sessionReusable: false});
-    else if (state.result?.subtype === 'success' && !state.result.is_error && code === 0 && !state.forced && state.sessionId) {
+    else if (state.result?.subtype === 'success' && !state.result.is_error && !state.apiFailure && code === 0 && !state.forced && state.sessionId) {
       invocationVerified = true;
       emit(state, 'completed', {text: typeof state.result.result === 'string' ? state.result.result : state.text.text,
         ...(state.result.structured_output !== undefined ? {structuredOutput: state.result.structured_output} : {}), toolResults: state.toolResults, sessionReusable: true});
-    } else emit(state, 'failed', {code: state.forced ? 'CLI_SHUTDOWN_TIMEOUT' : 'CLI_RUN_FAILED', message: state.result?.subtype === 'error_max_turns' ? 'AI 达到运行上限，请缩短问题后重试。' : 'AI 运行未正常完成，请检查 Claude Code 登录和服务状态后重试。', sessionReusable: false});
+    } else emit(state, 'failed', {...(state.apiFailure || state.lastRetry || {code: state.forced ? 'CLI_SHUTDOWN_TIMEOUT' : 'CLI_RUN_FAILED', message: state.result?.subtype === 'error_max_turns' ? 'AI 达到运行上限，请缩短问题后重试。' : 'AI 运行未正常完成，请检查 Claude Code 登录和服务状态后重试。'}), sessionReusable: false});
     state.closed = true; state.permissions.clear(); state.queue.close(); runs.delete(state.request.runId); state.resolveClose();
   };
   const handle = (state: Active, message: Record<string, any>) => {
@@ -125,11 +126,22 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       state.sessionId = message.session_id;
       emit(state, 'initialized', {cliSessionId: message.session_id, tools: actualTools, model: String(message.model || '')});
     }
-    if (message.type === 'system' && message.subtype === 'api_retry') emit(state, 'retrying', {attempt: Number(message.attempt || 0), maxRetries: Number(message.max_retries || 0), delayMs: Number(message.retry_delay_ms || 0)});
+    if (message.type === 'system' && message.subtype === 'api_retry') {
+      state.lastRetry = classifyCliFailure(message.no_response ? 'no_response' : message.error, message.error_status);
+      emit(state, 'retrying', {attempt: Number(message.attempt || 0), maxRetries: Number(message.max_retries || 0), delayMs: Number(message.retry_delay_ms || 0), errorCategory: state.lastRetry.errorCategory, ...(state.lastRetry.status ? {status: state.lastRetry.status} : {})});
+    }
+    if (message.type === 'assistant' && (message.isApiErrorMessage === true || message.error)) {
+      const diagnostic = (message.message?.content || []).filter((block: any) => block.type === 'text').map((block: any) => String(block.text || '')).join('\n');
+      state.apiFailure = classifyCliFailure(message.error, message.status ?? message.error_status, diagnostic);
+      return; // CLI system errors must never become a normal assistant message.
+    }
     const delta = state.text.consume(message);
     if (delta) emit(state, 'text_delta', {text: delta});
     if (message.type === 'assistant' && !message.parent_tool_use_id) {
-      for (const block of message.message?.content || []) if (block.type === 'tool_use') state.toolCalls.set(String(block.id), String(block.name));
+      for (const block of message.message?.content || []) if (block.type === 'tool_use') {
+        state.toolCalls.set(String(block.id), String(block.name));
+        if (block.name === 'WebSearch' && typeof block.input?.query === 'string') state.toolQueries.set(String(block.id), block.input.query);
+      }
     }
     if (message.type === 'user' && !message.parent_tool_use_id) {
       for (const block of message.message?.content || []) {
@@ -139,7 +151,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
         const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content || '');
         const success = block.is_error !== true;
         const errorCode = /permission|denied by user|did not allow/i.test(content) ? 'PERMISSION_DENIED' : /\b403\b/.test(content) ? 'HTTP_403' : 'TOOL_FAILED';
-        state.toolResults.push({toolName, toolUseId: String(block.tool_use_id), success, ...(!success ? {errorCode} : {})});
+        const resultCount = toolName === 'WebSearch' && success ? webSearchResultCount(block.content, state.toolQueries.get(String(block.tool_use_id))) : undefined;
+        state.toolResults.push({toolName, toolUseId: String(block.tool_use_id), success, ...(!success ? {errorCode} : {}), ...(resultCount !== undefined ? {resultCount} : {})});
       }
     }
     if (message.type === 'control_request') {
@@ -161,6 +174,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
     if (message.type === 'result') {
       if (state.result) return;
       state.result = message;
+      if ((message.is_error || message.subtype !== 'success') && !state.apiFailure) {
+        const diagnostic = [...(Array.isArray(message.errors) ? message.errors.filter((value: unknown) => typeof value === 'string') : []), typeof message.result === 'string' ? message.result : ''].join('\n');
+        const classified = classifyCliFailure(undefined, undefined, diagnostic);
+        state.apiFailure = classified.errorCategory === 'unknown' ? state.lastRetry : classified;
+      }
       state.proc.stdin.end();
       state.finishTimer = setTimeout(() => { if (!state.closed) { state.forced = true; stop(state); } }, options.shutdownGraceMs ?? 5000);
     }
@@ -196,7 +214,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       const sessionId = request.session.mode === 'resume' ? request.session.cliSessionId : randomUUID();
       const proc = spawn(binary, claudeArguments(request, sessionId, options.model), {cwd, env: environment(), stdio: ['pipe', 'pipe', 'pipe']});
       let resolveClose!: () => void;
-      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolCalls: new Map(), toolResults: [], cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
+      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
       runs.set(request.runId, state);
       const decoder = new JsonLineDecoder(message => handle(state, message));
       let stderrBytes = 0;
@@ -207,7 +225,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       proc.stdin.on('error', () => { if (!state.result && !state.cancelled) fail(state, 'CLI_INPUT_CLOSED', 'AI 输入通道已关闭，请重试。'); });
       proc.on('error', () => { state.failure = {code: 'CLI_START_FAILED', message: 'Claude Code 无法启动，请检查安装与执行权限。'}; finish(state, null); });
       proc.on('close', code => { if (stderrBytes) log(`Claude Code diagnostic output withheld (${stderrBytes} bytes).`); finish(state, code); });
-      state.timer = setTimeout(() => fail(state, 'CLI_TIMEOUT', 'AI 运行超时，内容已保留，可以重试。'), options.maxRunMs ?? 300000);
+      state.timer = setTimeout(() => {
+        const known = state.apiFailure || (state.lastRetry?.errorCategory !== 'unknown' ? state.lastRetry : undefined);
+        if (known) { state.failure = known; stop(state); }
+        else fail(state, 'CLI_TIMEOUT', 'AI 运行超时，内容已保留，可以重试。');
+      }, options.maxRunMs ?? 300000);
       write(state, {type: 'user', message: {role: 'user', content: [{type: 'text', text: request.input}]}});
       return {runId: request.runId, events: state.queue};
       } finally { starting.delete(request.runId); pending.resolve(); }

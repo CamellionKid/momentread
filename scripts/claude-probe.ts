@@ -35,8 +35,12 @@ async function run(request: StartRun, options: {cancel?: boolean; deny?: boolean
   const terminal = events.at(-1);
   if (!terminal || !['completed', 'cancelled'].includes(terminal.type)) process.exitCode = 1;
   if (request.purpose === 'matching' && !options.deny) {
-    const results = terminal?.data.toolResults as Array<{success: boolean}> | undefined;
+    const results = terminal?.data.toolResults as Array<{toolName: string; success: boolean; resultCount?: number}> | undefined;
     if (!results?.length || results.some(result => !result.success)) process.exitCode = 1;
+    if (mode === 'search' && !results?.some(result => result.toolName === 'WebSearch' && result.success && (result.resultCount ?? 0) > 0)) {
+      console.log(JSON.stringify({check: 'search_returned_result_links', passed: false, reason: 'No explicit result links were observed in the actual search tool response.'}));
+      process.exitCode = 1;
+    }
   }
   return events;
 }
