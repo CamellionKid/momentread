@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+._*
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Dependencies, builds and caches
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.vite/
+.next/
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime output and private reading data (reserved paths)
+/logs/
+/data/
+/local-data/
+/books/
+/tmp/
+*.log
+*.epub
+*.mobi
+*.azw
+*.azw3
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
