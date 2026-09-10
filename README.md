@@ -2,7 +2,9 @@
 
 在浏览器里阅读 EPUB，按需请求 AI 解析，在概念分支中深入讨论，再整理并返回原来的阅读思路。
 
-**当前状态：已整理开发架构基线，尚无可执行应用。** 已确定独立本地网页、Claude Code 首个后端及 ThoughtDAG 模块复用方向。本文仍是安装和使用说明草稿；依赖版本、配置路径、安装与启动命令将在实现验证后补齐。
+**当前状态：已有可运行的交互设计原型，真实学习功能尚未接入。** 已确定独立本地网页、Claude Code 首个后端及 ThoughtDAG 模块复用方向。原型中的 AI、EPUB 和来源匹配使用演示数据，刷新重置。
+
+先看 [原型启动与体验](prototype/README.md)、[UI／UX 设计说明](docs/design/UI-UX.md) 和 [设计验收](prototype/design-qa.md)。生产安装、配置与数据备份部分仍为交付要求草稿。
 
 需求与验收见 [PRD](docs/PRD.md)，后续开发从 [技术选型与架构](docs/ARCHITECTURE.md) 开始，已确认的界面见 [设计说明](docs/design/README.md)。
 
