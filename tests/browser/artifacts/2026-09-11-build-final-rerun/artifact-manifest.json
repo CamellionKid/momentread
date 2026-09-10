@@ -1,0 +1,60 @@
+{
+  "synthetic": true,
+  "realModelInvocations": 0,
+  "startedAt": "2026-09-10T22:55:22.093Z",
+  "finishedAt": "2026-09-10T22:55:33.630Z",
+  "repo": "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead",
+  "dataDir": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-GBcnt0",
+  "output": "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun",
+  "clientSnapshot": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-GBcnt0/candidate/dist/client",
+  "clientFiles": [
+    {
+      "file": "assets/epub-BGd4-WIx.js",
+      "sha256": "559d060f31506428c06a0c886082939d4475c14e45efb52014248fbae317959c",
+      "bytes": 25749
+    },
+    {
+      "file": "assets/index-ChfecWWy.css",
+      "sha256": "7c633640a5e27b236bfa8e0ac726e31d48e12448d3664dfa5ad94b25daff7b22",
+      "bytes": 44916
+    },
+    {
+      "file": "assets/index-pFKU6AIF.js",
+      "sha256": "8b7cff3c84e0bc9c4bc25996f6a8fcf21101c8d4e25b05c99f13008f1b8a14da",
+      "bytes": 493178
+    },
+    {
+      "file": "assets/paginator-N8f9xScz.js",
+      "sha256": "4ad977e0f5c9ad69b6c6de412ca41575560506528bfacb2c2114fe3b0cf7a4e2",
+      "bytes": 24515
+    },
+    {
+      "file": "index.html",
+      "sha256": "4fd26132cbbdd42a8c6cdf029f45da920bb01c8ccd51009a8637d42b8f87cdcb",
+      "bytes": 365
+    }
+  ],
+  "node": "v22.23.0",
+  "playwright": "1.63.0",
+  "url": "http://127.0.0.1:4325",
+  "prepareOnly": false,
+  "status": "passed",
+  "suites": [
+    {
+      "script": "scale-layout.cjs",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "script": "source-state.cjs",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "script": "report-date.cjs",
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "error": null
+}

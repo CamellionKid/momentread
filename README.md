@@ -2,7 +2,7 @@
 
 在浏览器里阅读 EPUB，遇到不懂的段落时请求 AI 解析；把概念展开成独立分支，再整理并返回原来的阅读思路。
 
-**当前状态：真实首版工程已接入，正在系统与盲测验收，尚未达到完整交付门槛。** 生产入口位于仓库根目录。原著自动检索仍有明确阻塞：本机 Claude provider 的公开网络工具实测失败，不能宣称自动匹配已可用。候选独立取回与文字核对已有另外的实测，二者不能混为一谈。当前验证状态见 [开发清单](docs/development/STATUS.md)、[独立系统测试](docs/development/SYSTEM-TESTS.md) 和 [Claude 实测](docs/development/CLAUDE.md)。
+**当前状态：阅读与学习主链已完成实际验收；自动原著发现和最终提交盲测尚未放行。** 生产入口位于仓库根目录。额度恢复后真实首次调用、明确接续、小结和今日总结均通过。原著自动检索仍有明确阻塞：本机 Claude provider 的 WebSearch 返回零条结果，不能宣称自动匹配已可用。候选独立取回与文字核对已有另外的实测，二者不能混为一谈。当前验证状态见 [开发清单](docs/development/STATUS.md)、[首版验收](docs/development/ACCEPTANCE.md)、[独立系统测试](docs/development/SYSTEM-TESTS.md) 和 [Claude 实测](docs/development/CLAUDE.md)。
 
 ## 准备环境
 
@@ -161,6 +161,7 @@ npm run test:unit
 npm run test:integration
 npm run test:contract
 npm run contracts
+npx tsx tests/browser/run-scale.ts --port 4325
 ```
 
 `contracts` 从共享 schema 生成 OpenAPI 文档。普通测试使用合成或公开测试材料，不自动调用真实模型。真实调用另行选择场景：

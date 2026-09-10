@@ -1,0 +1,433 @@
+{
+  "synthetic": true,
+  "realModelInvocations": 0,
+  "url": "http://127.0.0.1:4325",
+  "discussionCount": 500,
+  "pathLength": 20,
+  "startedAt": "2026-09-10T22:55:22.649Z",
+  "checks": [
+    {
+      "name": "1487x1058 panels and input remain inside the viewport",
+      "status": "passed",
+      "durationMs": 22,
+      "detail": {
+        "dimensions": {
+          "width": 1487,
+          "scrollWidth": 1487,
+          "height": 1058,
+          "scrollHeight": 1058
+        },
+        "input": {
+          "x": 842.046875,
+          "y": 954,
+          "width": 262.953125,
+          "height": 50
+        },
+        "panel": {
+          "x": 822.046875,
+          "y": 51,
+          "width": 434.953125,
+          "height": 1007
+        },
+        "route": {
+          "x": 1257,
+          "y": 51,
+          "width": 230,
+          "height": 1007
+        }
+      }
+    },
+    {
+      "name": "1487x1058 500 nodes use full-size scrollable layout",
+      "status": "passed",
+      "durationMs": 7,
+      "detail": {
+        "count": 500,
+        "clientWidth": 230,
+        "clientHeight": 1007,
+        "scrollWidth": 1275,
+        "scrollHeight": 48550,
+        "minNodeWidth": 42,
+        "minNodeHeight": 42,
+        "visibleLabels": 0
+      }
+    },
+    {
+      "name": "1487x1058 complete ancestor dialog exposes all 20 levels",
+      "status": "passed",
+      "durationMs": 124,
+      "detail": {
+        "pathItems": [
+          "1段落解析",
+          "2第02层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "3第03层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "4第04层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "5第05层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "6第06层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "7第07层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "8第08层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "9第09层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "10第10层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "11第11层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "12第12层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "13第13层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "14第14层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "15第15层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "16第16层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "17第17层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "18第18层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "19第19层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "20第20层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论"
+        ],
+        "rect": {
+          "x": 498.5,
+          "y": 25,
+          "width": 490,
+          "height": 1008
+        }
+      }
+    },
+    {
+      "name": "1487x1058 branch folding preserves the active path and expands back to 500",
+      "status": "passed",
+      "durationMs": 206,
+      "detail": {
+        "folded": 44,
+        "expanded": 500
+      }
+    },
+    {
+      "name": "1487x1058 switching sibling nodes preserves independent drafts",
+      "status": "passed",
+      "durationMs": 868,
+      "detail": {
+        "durationMs": 868,
+        "savedDraft": "规模浏览器草稿 1487x1058：只属于同级 001。"
+      }
+    },
+    {
+      "name": "1487x1058 long discussion scrolls independently and Markdown stays contained",
+      "status": "passed",
+      "durationMs": 102,
+      "detail": {
+        "initial": {
+          "scrollTop": 0,
+          "scrollHeight": 2298,
+          "clientHeight": 648
+        },
+        "codeMetrics": {
+          "clientWidth": 384,
+          "scrollWidth": 2224,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "name": "1280x720 panels and input remain inside the viewport",
+      "status": "passed",
+      "durationMs": 18,
+      "detail": {
+        "dimensions": {
+          "width": 1280,
+          "scrollWidth": 1280,
+          "height": 720,
+          "scrollHeight": 720
+        },
+        "input": {
+          "x": 736.09375,
+          "y": 616,
+          "width": 206.90625,
+          "height": 50
+        },
+        "panel": {
+          "x": 716.09375,
+          "y": 51,
+          "width": 378.90625,
+          "height": 669
+        },
+        "route": {
+          "x": 1095,
+          "y": 51,
+          "width": 185,
+          "height": 669
+        }
+      }
+    },
+    {
+      "name": "1280x720 500 nodes use full-size scrollable layout",
+      "status": "passed",
+      "durationMs": 5,
+      "detail": {
+        "count": 500,
+        "clientWidth": 185,
+        "clientHeight": 669,
+        "scrollWidth": 1275,
+        "scrollHeight": 48550,
+        "minNodeWidth": 42,
+        "minNodeHeight": 42,
+        "visibleLabels": 0
+      }
+    },
+    {
+      "name": "1280x720 complete ancestor dialog exposes all 20 levels",
+      "status": "passed",
+      "durationMs": 101,
+      "detail": {
+        "pathItems": [
+          "1段落解析",
+          "2第02层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "3第03层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "4第04层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "5第05层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "6第06层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "7第07层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "8第08层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "9第09层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "10第10层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "11第11层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "12第12层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "13第13层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "14第14层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "15第15层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "16第16层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "17第17层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "18第18层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "19第19层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "20第20层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论"
+        ],
+        "rect": {
+          "x": 395,
+          "y": 25,
+          "width": 490,
+          "height": 670
+        }
+      }
+    },
+    {
+      "name": "1280x720 branch folding preserves the active path and expands back to 500",
+      "status": "passed",
+      "durationMs": 178,
+      "detail": {
+        "folded": 44,
+        "expanded": 500
+      }
+    },
+    {
+      "name": "1280x720 switching sibling nodes preserves independent drafts",
+      "status": "passed",
+      "durationMs": 881,
+      "detail": {
+        "durationMs": 881,
+        "savedDraft": "规模浏览器草稿 1280x720：只属于同级 001。"
+      }
+    },
+    {
+      "name": "1280x720 long discussion scrolls independently and Markdown stays contained",
+      "status": "passed",
+      "durationMs": 96,
+      "detail": {
+        "initial": {
+          "scrollTop": 685,
+          "scrollHeight": 2812,
+          "clientHeight": 325
+        },
+        "codeMetrics": {
+          "clientWidth": 328,
+          "scrollWidth": 2224,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "name": "390x844 panels and input remain inside the viewport",
+      "status": "passed",
+      "durationMs": 16,
+      "detail": {
+        "dimensions": {
+          "width": 390,
+          "scrollWidth": 390,
+          "height": 844,
+          "scrollHeight": 844
+        },
+        "input": {
+          "x": 13,
+          "y": 711,
+          "width": 251,
+          "height": 50
+        },
+        "panel": {
+          "x": 0,
+          "y": 93,
+          "width": 308,
+          "height": 751
+        },
+        "route": {
+          "x": 308,
+          "y": 93,
+          "width": 82,
+          "height": 751
+        }
+      }
+    },
+    {
+      "name": "390x844 500 nodes use full-size scrollable layout",
+      "status": "passed",
+      "durationMs": 5,
+      "detail": {
+        "count": 500,
+        "clientWidth": 82,
+        "clientHeight": 751,
+        "scrollWidth": 1275,
+        "scrollHeight": 48550,
+        "minNodeWidth": 42,
+        "minNodeHeight": 42,
+        "visibleLabels": 0
+      }
+    },
+    {
+      "name": "390x844 complete ancestor dialog exposes all 20 levels",
+      "status": "passed",
+      "durationMs": 78,
+      "detail": {
+        "pathItems": [
+          "1段落解析",
+          "2第02层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "3第03层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "4第04层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "5第05层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "6第06层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "7第07层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "8第08层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "9第09层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "10第10层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "11第11层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "12第12层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "13第13层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "14第14层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "15第15层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "16第16层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "17第17层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "18第18层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "19第19层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论",
+          "20第20层 · 用于检验完整祖先路径和超长标题换行的合成概念讨论"
+        ],
+        "rect": {
+          "x": 16,
+          "y": 12,
+          "width": 358,
+          "height": 820
+        }
+      }
+    },
+    {
+      "name": "390x844 branch folding preserves the active path and expands back to 500",
+      "status": "passed",
+      "durationMs": 218,
+      "detail": {
+        "folded": 44,
+        "expanded": 500
+      }
+    },
+    {
+      "name": "390x844 switching sibling nodes preserves independent drafts",
+      "status": "passed",
+      "durationMs": 917,
+      "detail": {
+        "durationMs": 917,
+        "savedDraft": "规模浏览器草稿 390x844：只属于同级 001。"
+      }
+    },
+    {
+      "name": "390x844 long discussion scrolls independently and Markdown stays contained",
+      "status": "passed",
+      "durationMs": 102,
+      "detail": {
+        "initial": {
+          "scrollTop": 1285,
+          "scrollHeight": 2930,
+          "clientHeight": 411
+        },
+        "codeMetrics": {
+          "clientWidth": 275,
+          "scrollWidth": 1858,
+          "overflow": "auto"
+        }
+      }
+    },
+    {
+      "name": "1487x1058 editable summary dialog and its controls are reachable",
+      "status": "passed",
+      "durationMs": 97,
+      "detail": {
+        "rect": {
+          "x": 418.5,
+          "y": 185.703125,
+          "width": 650,
+          "height": 686.59375
+        },
+        "controls": [
+          "",
+          "暂不确认",
+          "确认并保存"
+        ]
+      }
+    },
+    {
+      "name": "1280x720 editable summary dialog and its controls are reachable",
+      "status": "passed",
+      "durationMs": 44,
+      "detail": {
+        "rect": {
+          "x": 315,
+          "y": 25,
+          "width": 650,
+          "height": 670
+        },
+        "controls": [
+          "",
+          "暂不确认",
+          "确认并保存"
+        ]
+      }
+    },
+    {
+      "name": "390x844 editable summary dialog and its controls are reachable",
+      "status": "passed",
+      "durationMs": 32,
+      "detail": {
+        "rect": {
+          "x": 16,
+          "y": 96.90625,
+          "width": 358,
+          "height": 650.1875
+        },
+        "controls": [
+          "",
+          "暂不确认",
+          "确认并保存"
+        ]
+      }
+    }
+  ],
+  "screenshots": [
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-reading.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-summary-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-summary-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-summary-dialog.png"
+  ],
+  "pageErrors": [],
+  "outboundRequests": [],
+  "browserVersion": "153.0.8010.36",
+  "finishedAt": "2026-09-10T22:55:31.418Z",
+  "passed": 21,
+  "failed": 0
+}
