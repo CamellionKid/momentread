@@ -223,7 +223,7 @@ AI 回译、重构的外文不能展示为检索所得原文。无依据的百�
 
 候选：
 
-- [OpenCode Server](https://opencode.ai/docs/server/)：现成 HTTP 服务提供会话、fork、消息和事件流；建议优先验证网页对接。
+- [OpenCode Server](https://opencode.ai/docs/server/)：现成 HTTP 服务提供会话、fork、消息和事件流；此前建议优先验证网页对接，现结合 ThoughtDAG 的现成桥接重新比较验证顺序，后端尚未定案。
 - [Claude Code 程序化调用](https://code.claude.com/docs/en/headless)：可通过非交互 CLI、流式输出和会话恢复接入，需要本地桥接。
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：提供本地 Web UI 和插件式 harness，可评估以插件扩展阅读能力；上游目前标为开发者预览。
 
@@ -293,11 +293,13 @@ AI 回译、重构的外文不能展示为检索所得原文。无依据的百�
 
 ## 10. 待决事项与下一阶段
 
+2026-09-10 补充：[ThoughtDAG 复用评估](research/thoughtdag-reuse.md)已核查固定提交源码，并通过 6 项纯图算法测试。它提供 Claude Code 本地桥接和 DeepSeek Harness 插件，可作为后端技术验证的新起点；其“一轮问答一个节点”与本产品“一场讨论一个节点”不同，整理回馈和书内多义概念记忆仍需实现。完整 UI、CLI 和 DSH 集成尚未运行验证，当前不改变已确认交互或确定技术架构。
+
 | 决策 | 当前状态 | 何时需要决定 |
 |---|---|---|
 | 视觉方向、面板比例、明暗主题 | 第 3 张深色及多级分支修订图已认可 | 可点击原型沿用 |
 | 载体与部署 | 已确定本地网页版，接受环境配置门槛，以 README 支持安装和使用 | 正式交付时验证文档 |
-| 首个 AI 后端、模型与检索服务 | OpenCode 优先验证建议；Claude Code、DeepSeek Harness 为候选，尚未定案 | 接入前 |
+| 首个 AI 后端、模型与检索服务 | OpenCode、Claude Code、DeepSeek Harness 均未定案；结合 ThoughtDAG 的 Claude Code／DSH 现成桥接比较验证优先级 | 接入前 |
 | 存储目录、数据库及备份 | 建议本机保存，具体方案待定 | 真实数据接入前 |
 | 阅读内核与线路图库 | 已有候选，未做运行验证 | 技术验证后 |
 | 整理后的二次确认细节 | 本稿建议可编辑预览再确认 | 可点击原型试用时 |

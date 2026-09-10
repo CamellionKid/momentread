@@ -14,6 +14,7 @@
 - [初始需求](docs/original-requirements.md)：用户最初的需求文本快照，保留原样。
 - [选定原型](docs/design/selected-prototype.png)：已认可的深色、多级概念分支修订图。
 - [线路参考图](docs/design/route-reference.png)：用户提供的最初线路结构参考。
+- [ThoughtDAG 复用评估](docs/research/thoughtdag-reuse.md)：分支算法、CLI／DSH 桥接的源码入口、适配差异及验证边界。
 
 ## Git 管理
 
