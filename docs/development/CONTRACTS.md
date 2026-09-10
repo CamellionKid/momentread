@@ -18,9 +18,15 @@ AI 导出 createClaudeAdapter(options?)，实现 ClaudeAdapter。事件 envelope
 - text_delta：`data={text:"新增文字"}`，不是整段替换。
 - permission_required：`data={requestId:"...",toolName:"WebSearch",input:{query:"..."},description:"..."}`。
 - permission_resolved：`data={requestId:"...",decision:"allowOnce"}`。
-- retrying：`data={attempt:1,delayMs:1000,category:"..."}`。
+- retrying：`data={attempt:1,delayMs:1000,category:"...",errorCategory:"rate_limit",status:429}`。`errorCategory` 与 `status` 可选；分类使用固定白名单，HTTP 状态限制为 400–599，不透传 provider 原始错误或凭据。
 - completed：`data={text:"完整最终文字",structuredOutput:可选JSON,sessionReusable:true,toolResults:可选数组}`。discussion/daily消费text；summary消费严格`{content:string}`；matching消费严格`{candidates:[{url,title,language,version,quote,locator,reason}]}`。toolResults中的失败不能当作检索成功。
 - cancelled：`data={partialText:"...",sessionReusable:false}`；保留已有片段，不再追加。
-- failed：`data={code:"...",message:"可展示原因",partialText:"...",sessionReusable:false}`。
+- failed：`data={code:"CLI_RATE_LIMIT",message:"可展示原因",partialText:"...",sessionReusable:false,errorCategory:"rate_limit",status:429}`。分类和状态同上；CLI 错误消息不作为 AI 正文片段保存。
 
 少了最终结果、结构不符、只有stdout/退出码零，都不能标完成。summary不接受任意自然语言回退成有效结构化小结。事件终态只有一次；产品端持久化事件后再发到浏览器。
+
+## 今日总结的运行归属
+
+新建 daily 运行在 queued 时即保存 `reportTarget={date,timezone}`，成功、失败和重启中断均保留；它是用户请求的阅读日期，不是运行创建日期。界面按 bookId、purpose、date、timezone 查找最新尝试，失败后显示原因和重试，并保留此前成功的建议。旧的成功运行可从 result 中读取日期；旧失败记录没有明确目标时不得根据 createdAt 猜测阅读日期。
+
+工作区的规范 ID 等于 bookId。新导入和 HTTP 读取使用同一记录；旧版非规范 ID 在首次访问时按该书最新 updatedAt 复制到规范记录，保留旧记录以避免删除历史。已有规范记录优先，不被旧记录覆盖。

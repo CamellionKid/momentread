@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {AppError,now,type ContextSnapshot,type Run,type RunEvent,type RunPurpose} from '../shared/contracts/index';
 import type {ClaudeAdapter,Store} from '../shared/contracts/ports';
 
-type Hooks={onComplete?:(event:RunEvent,run:Run)=>Promise<void>|void;result?:(event:RunEvent,run:Run)=>unknown;onTerminal?:(run:Run)=>Promise<void>|void};
+type Hooks={reportTarget?:{date:string;timezone:string};onComplete?:(event:RunEvent,run:Run)=>Promise<void>|void;result?:(event:RunEvent,run:Run)=>unknown;onTerminal?:(run:Run)=>Promise<void>|void};
 export class RunManager {
  private active=new Map<string,{discussionId:string;purpose:RunPurpose}>();
  constructor(private store:Store,private adapter:ClaudeAdapter){
@@ -17,7 +17,7 @@ export class RunManager {
   if(this.busy(context.discussionId))throw new AppError('RUN_BUSY','当前讨论仍有运行，请等待或停止后重试。',409,true);
   if(this.active.size>=3)throw new AppError('RUNTIME_BUSY','当前任务较多，请稍后重试。',429,true);
   const session=purpose==='discussion'?this.store.list('sessions',context.bookId).filter(s=>s.discussionId===context.discussionId&&s.reusable).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0]:undefined;
-  const run:Run={id:randomUUID(),bookId:context.bookId,discussionId:context.discussionId,purpose,status:'queued',contextSnapshotId:context.id,sessionId:session?.cliSessionId??null,sessionReusable:false,partialText:'',result:null,error:null,createdAt:now(),updatedAt:now()};
+  const run:Run={id:randomUUID(),bookId:context.bookId,discussionId:context.discussionId,purpose,...(hooks.reportTarget?{reportTarget:hooks.reportTarget}:{}),status:'queued',contextSnapshotId:context.id,sessionId:session?.cliSessionId??null,sessionReusable:false,partialText:'',result:null,error:null,createdAt:now(),updatedAt:now()};
   this.store.put('runs',run);this.active.set(run.id,{discussionId:run.discussionId,purpose});
   void this.consume(run,context,hooks,outputSchema,session?.cliSessionId);
   return run;

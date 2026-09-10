@@ -4352,6 +4352,22 @@
               "daily"
             ]
           },
+          "reportTarget": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "date",
+              "timezone"
+            ],
+            "additionalProperties": false
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -5506,6 +5522,22 @@
                     "matching",
                     "daily"
                   ]
+                },
+                "reportTarget": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "timezone"
+                  ],
+                  "additionalProperties": false
                 },
                 "status": {
                   "type": "string",

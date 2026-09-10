@@ -156,7 +156,7 @@ export function createBookLibrary(store: Store, dataDir: string): BookLibrary {
       const book: Book = {id,...metadata,fileVersionId: file.id,createdAt: now()};
       try { store.transaction(() => {
         store.put('books', book); store.put('files', file);
-        store.put('workspaces', {id: randomUUID(),bookId: id,position: null,activeDiscussionId: null,collapsed: [],fontSize: 24,updatedAt: now()});
+        store.put('workspaces', {id,bookId: id,position: null,activeDiscussionId: null,collapsed: [],fontSize: 24,updatedAt: now()});
       }); } catch (error) { await rm(resolve(base, file.relativePath), {force: true}); throw error; }
       return book;
     }); },
