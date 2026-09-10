@@ -1,0 +1,23 @@
+import {z} from 'zod';
+import {Id,PositionSchema} from './index';
+export const BookMetadataPatchSchema=z.object({title:z.string().trim().min(1).max(500).optional(),author:z.string().trim().max(500).optional(),language:z.string().trim().max(100).optional(),translator:z.string().trim().max(500).optional(),edition:z.string().trim().max(1000).optional(),identifier:z.string().trim().max(500).optional()}).strict();
+export const WorkspacePatchSchema=z.object({position:PositionSchema.nullable().optional(),activeDiscussionId:Id.nullable().optional(),collapsed:z.array(Id).optional(),fontSize:z.number().min(16).max(36).optional()}).strict();
+export const DiscussionPatchSchema=z.object({draft:z.string().max(100000).optional(),scrollTop:z.number().nonnegative().optional()}).strict();
+export const MessageRequestSchema=z.object({text:z.string().min(1).max(20000)});
+export const SourcePatchSchema=z.object({selected:z.boolean().optional(),verification:z.enum(['unverified','confirmed','conflict']).optional()}).strict();
+export const PermissionRequestSchema=z.object({requestId:z.string().min(1),decision:z.enum(['allowOnce','deny'])});
+
+import {BookSchema,WorkspaceSchema,DiscussionSchema,MessageSchema,SummarySchema,ReceiptSchema,SourceSchema,ConceptSchema,RunSchema,ActivitySchema} from './index';
+export const RunStartResponseSchema=z.object({runId:Id});
+export const DiscussionStartResponseSchema=z.object({runId:Id,discussionId:Id});
+export const ConfirmResponseSchema=z.object({summary:SummarySchema,parentId:Id.nullable()});
+export const OkResponseSchema=z.object({ok:z.literal(true)});
+export const BookListResponseSchema=z.array(BookSchema);
+export const HistoryResponseSchema=z.array(SummarySchema);
+export const RuntimeResponseSchema=z.object({installed:z.boolean(),version:z.string().nullable(),authReported:z.boolean(),invocationVerified:z.boolean(),message:z.string()});
+export const BookStateResponseSchema=z.object({book:BookSchema,workspace:WorkspaceSchema,discussions:z.array(DiscussionSchema),messages:z.array(MessageSchema),summaries:z.array(SummarySchema),receipts:z.array(ReceiptSchema),sources:z.array(SourceSchema),concepts:z.array(ConceptSchema),runs:z.array(RunSchema),activities:z.array(ActivitySchema)});
+export const DailyReportResponseSchema=z.object({book:BookSchema,date:z.string(),timezone:z.string(),activities:z.array(ActivitySchema),discussions:z.array(DiscussionSchema),summaries:z.array(SummarySchema),concepts:z.array(ConceptSchema),sources:z.array(SourceSchema),advice:z.string()});
+export const HealthResponseSchema=z.object({status:z.literal('ok'),version:z.string()});
+export const BackupResponseSchema=z.object({id:z.string()});
+export const ErrorResponseSchema=z.object({error:z.object({code:z.string(),message:z.string(),retryable:z.boolean()}),requestId:Id});
+export const SummaryOutputSchema=z.object({content:z.string().min(1)});

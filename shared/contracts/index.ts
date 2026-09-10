@@ -1,0 +1,35 @@
+import {z} from 'zod';
+export const Id=z.string().uuid();
+export const Time=z.string().datetime();
+export const BookSchema=z.object({id:Id,title:z.string(),author:z.string(),language:z.string(),translator:z.string().optional(),edition:z.string().optional(),identifier:z.string().optional(),fileVersionId:Id,createdAt:Time});
+export const FileVersionSchema=z.object({id:Id,bookId:Id,filename:z.string(),mediaType:z.string(),sha256:z.string(),relativePath:z.string(),size:z.number().nonnegative(),role:z.enum(['book','original']),createdAt:Time});
+export const SegmentSchema=z.object({spineId:z.string(),chapter:z.string(),cfi:z.string().min(1),exact:z.string().min(1),prefix:z.string().default(''),suffix:z.string().default('')});
+export const TextReferenceSchema=z.object({bookId:Id,fileVersionId:Id,segments:z.array(SegmentSchema).min(1)});
+export const PositionSchema=z.object({fileVersionId:Id,cfi:z.string(),progress:z.number().min(0).max(1),chapter:z.string()});
+export const WorkspaceSchema=z.object({id:Id,bookId:Id,position:PositionSchema.nullable(),activeDiscussionId:Id.nullable(),collapsed:z.array(Id),fontSize:z.number().min(16).max(36),updatedAt:Time});
+export const OriginSchema=z.object({messageId:Id,start:z.number().int().nonnegative(),end:z.number().int().positive(),exact:z.string().min(1)});
+export const DiscussionSchema=z.object({id:Id,bookId:Id,parentId:Id.nullable(),rootId:Id,title:z.string().min(1).max(160),source:TextReferenceSchema.nullable(),origin:OriginSchema.nullable(),draft:z.string(),scrollTop:z.number().nonnegative(),revision:z.number().int().nonnegative(),needsMerge:z.boolean(),createdAt:Time});
+export const MessageSchema=z.object({id:Id,bookId:Id,discussionId:Id,role:z.enum(['user','assistant']),text:z.string(),status:z.enum(['complete','streaming','interrupted','failed']),runId:Id.nullable(),createdAt:Time});
+export const DependencySchema=z.object({summaryId:Id,version:z.number().int().positive()});
+export const SummarySchema=z.object({id:Id,bookId:Id,discussionId:Id,version:z.number().int().nonnegative(),content:z.string(),confirmed:z.boolean(),baseRevision:z.number().int().nonnegative(),dependencies:z.array(DependencySchema),sourceIds:z.array(Id),createdAt:Time,confirmedAt:Time.nullable()});
+export const ReceiptSchema=z.object({id:Id,bookId:Id,parentId:Id,childId:Id,summaryId:Id,version:z.number().int().positive(),createdAt:Time});
+export const SourceSchema=z.object({id:Id,bookId:Id,discussionId:Id,fileVersionId:Id.nullable(),language:z.string(),title:z.string(),version:z.string(),locator:z.string(),url:z.string(),quote:z.string(),evidenceHash:z.string(),retrieval:z.enum(['retrieved','fetch_failed','unavailable']),verification:z.enum(['unverified','confirmed','conflict']),selected:z.boolean(),reason:z.string(),createdAt:Time});
+export const ConceptSchema=z.object({id:Id,bookId:Id,discussionId:Id,summaryId:Id,title:z.string(),originalTerm:z.string(),definition:z.string(),context:z.string(),sourceIds:z.array(Id),createdAt:Time});
+export const ActivitySchema=z.object({id:Id,bookId:Id,fileVersionId:Id,cfi:z.string(),progress:z.number().min(0).max(1),chapter:z.string(),createdAt:Time});
+export const ContextSchema=z.object({id:Id,bookId:Id,discussionId:Id,discussionRevision:z.number().int().nonnegative(),input:z.string(),messageIds:z.array(Id),summaryDependencies:z.array(DependencySchema),sourceIds:z.array(Id),createdAt:Time});
+export const PurposeSchema=z.enum(['discussion','summary','matching','daily']);
+export const RunStatusSchema=z.enum(['queued','running','permission','completed','cancelled','failed','interrupted']);
+export const RunSchema=z.object({id:Id,bookId:Id,discussionId:Id,purpose:PurposeSchema,status:RunStatusSchema,contextSnapshotId:Id,sessionId:z.string().nullable(),sessionReusable:z.boolean(),partialText:z.string(),result:z.unknown().nullable(),error:z.string().nullable(),createdAt:Time,updatedAt:Time});
+export const SessionSchema=z.object({id:Id,bookId:Id,discussionId:Id,cliSessionId:z.string(),reusable:z.boolean(),createdAt:Time});
+export type Book=z.infer<typeof BookSchema>; export type FileVersion=z.infer<typeof FileVersionSchema>; export type TextReference=z.infer<typeof TextReferenceSchema>;export type ReadingPosition=z.infer<typeof PositionSchema>;export type Workspace=z.infer<typeof WorkspaceSchema>;export type Discussion=z.infer<typeof DiscussionSchema>;export type Message=z.infer<typeof MessageSchema>;export type SummaryVersion=z.infer<typeof SummarySchema>;export type Receipt=z.infer<typeof ReceiptSchema>;export type SourceCandidate=z.infer<typeof SourceSchema>;export type ConceptSense=z.infer<typeof ConceptSchema>;export type Activity=z.infer<typeof ActivitySchema>;export type ContextSnapshot=z.infer<typeof ContextSchema>;export type Run=z.infer<typeof RunSchema>;export type Session=z.infer<typeof SessionSchema>;export type RunPurpose=z.infer<typeof PurposeSchema>;
+export interface EntityMap{books:Book;files:FileVersion;workspaces:Workspace;discussions:Discussion;messages:Message;summaries:SummaryVersion;receipts:Receipt;sources:SourceCandidate;concepts:ConceptSense;activities:Activity;contexts:ContextSnapshot;runs:Run;sessions:Session;}
+export const entitySchemas={books:BookSchema,files:FileVersionSchema,workspaces:WorkspaceSchema,discussions:DiscussionSchema,messages:MessageSchema,summaries:SummarySchema,receipts:ReceiptSchema,sources:SourceSchema,concepts:ConceptSchema,activities:ActivitySchema,contexts:ContextSchema,runs:RunSchema,sessions:SessionSchema};
+export const EventSchema=z.object({runId:Id,bookId:Id,discussionId:Id,seq:z.number().int().nonnegative(),type:z.enum(['initialized','text_delta','permission_required','permission_resolved','retrying','completed','cancelled','failed']),data:z.record(z.string(),z.unknown()),createdAt:Time});export type RunEvent=z.infer<typeof EventSchema>;
+export const AnalysisRequestSchema=z.object({source:TextReferenceSchema,question:z.string().min(1).max(20000).default('解释这段文字，包括原文依据、内容拆解和例子。')});
+export const BranchRequestSchema=z.object({parentId:Id,title:z.string().min(1).max(160),origin:OriginSchema});
+export const ConfirmRequestSchema=z.object({requestId:Id,content:z.string().min(1).max(100000)});
+export class AppError extends Error {constructor(public code:string,message:string,public status=400,public retryable=false){super(message)}}
+export const now=()=>new Date().toISOString();
+export type AnalysisRequest=z.infer<typeof AnalysisRequestSchema>;export type BranchRequest=z.infer<typeof BranchRequestSchema>;export type ConfirmRequest=z.infer<typeof ConfirmRequestSchema>;
+export interface BookState {book:Book;workspace:Workspace;discussions:Discussion[];messages:Message[];summaries:SummaryVersion[];receipts:Receipt[];sources:SourceCandidate[];concepts:ConceptSense[];runs:Run[];activities:Activity[];}
+export interface DailyReport {book:Book;date:string;timezone:string;activities:Activity[];discussions:Discussion[];summaries:SummaryVersion[];concepts:ConceptSense[];sources:SourceCandidate[];advice:string;}

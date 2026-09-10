@@ -1,0 +1,18 @@
+import {serve} from '@hono/node-server';
+import {serveStatic} from '@hono/node-server/serve-static';
+import {resolve} from 'node:path';
+import {existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {createStore} from './storage/index';
+import {createBookLibrary} from './books/index';
+import {createClaudeAdapter} from './ai/index';
+import {createLearningService} from './learning/index';
+import {createMatchingService} from './matching/index';
+import {createApp} from './app';
+import {dataDir,port} from './config';
+const store=createStore(dataDir);const library=createBookLibrary(store,dataDir);const adapter=createClaudeAdapter({dataDir});
+const {app,runs}=createApp({store,library,adapter,learning:createLearningService(store),matching:createMatchingService(store,library),port});
+const here=fileURLToPath(new URL('.',import.meta.url));const built=resolve(here,'../client');const root=existsSync(resolve(built,'index.html'))?built:resolve(process.cwd(),'dist/client');
+app.use('*',serveStatic({root}));app.get('*',serveStatic({path:resolve(root,'index.html')}));
+const server=serve({fetch:app.fetch,hostname:'127.0.0.1',port},()=>process.stdout.write(`MomentRead: http://127.0.0.1:${port}\n数据目录: ${dataDir}\n`));
+let stopping=false;async function shutdown(){if(stopping)return;stopping=true;await runs.shutdown();server.close(()=>{store.close();process.exit(0)});setTimeout(()=>process.exit(1),8000).unref()};process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);
