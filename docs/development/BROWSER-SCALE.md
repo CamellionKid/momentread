@@ -14,10 +14,10 @@
 
 原始结果及前端资源 SHA-256：
 
-- [规模结果 JSON](../../tests/browser/artifacts/2026-09-11-build-final-rerun/results.json)
-- [来源状态结果 JSON](../../tests/browser/artifacts/2026-09-11-build-final-rerun/source-results.json)
-- [构建与环境清单](../../tests/browser/artifacts/2026-09-11-build-final-rerun/artifact-manifest.json)
-- [合成数据清单](../../tests/browser/artifacts/2026-09-11-build-final-rerun/seed-manifest.json)
+- [规模结果 JSON](../../tests/browser/artifacts/2026-09-11-review-fix-final/results.json)
+- [来源状态结果 JSON](../../tests/browser/artifacts/2026-09-11-review-fix-final/source-results.json)
+- [构建与环境清单](../../tests/browser/artifacts/2026-09-11-review-fix-final/artifact-manifest.json)
+- [合成数据清单](../../tests/browser/artifacts/2026-09-11-review-fix-final/seed-manifest.json)
 
 ## 三尺寸结果
 
@@ -42,9 +42,9 @@
 
 | 尺寸 | 主界面 | 完整路径 | 折叠后 | 小结编辑 |
 |---|---|---|---|---|
-| 1487×1058 | [讨论](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-summary-dialog.png) |
-| 1280×720 | [讨论](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-summary-dialog.png) |
-| 390×844 | [讨论](../../tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-discussion.png)、[正文](../../tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-reading.png) | [路径](../../tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-summary-dialog.png) |
+| 1487×1058 | [讨论](../../tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-summary-dialog.png) |
+| 1280×720 | [讨论](../../tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-summary-dialog.png) |
+| 390×844 | [讨论](../../tests/browser/artifacts/2026-09-11-review-fix-final/390x844-discussion.png)、[正文](../../tests/browser/artifacts/2026-09-11-review-fix-final/390x844-reading.png) | [路径](../../tests/browser/artifacts/2026-09-11-review-fix-final/390x844-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-review-fix-final/390x844-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-review-fix-final/390x844-summary-dialog.png) |
 
 ## 合成来源候选检查
 
@@ -55,11 +55,11 @@
 3. 再次明确点击「我已对照确认」，才变为 `verification=confirmed`。B 仍未选择、未确认。
 4. 浏览器实际发出的两次独立 PATCH 分别为 `{selected:true}` 与 `{verification:'confirmed',selected:true}`。确认动作可同时保留选择状态；它不是第一次选择动作的隐含效果。
 
-截图：[未选择](../../tests/browser/artifacts/2026-09-11-build-final-rerun/sources-unselected.png)、[已选但待核对](../../tests/browser/artifacts/2026-09-11-build-final-rerun/sources-selected-still-unverified.png)、[明确确认后](../../tests/browser/artifacts/2026-09-11-build-final-rerun/sources-explicitly-confirmed.png)。
+截图：[未选择](../../tests/browser/artifacts/2026-09-11-review-fix-final/sources-unselected.png)、[已选但待核对](../../tests/browser/artifacts/2026-09-11-review-fix-final/sources-selected-still-unverified.png)、[明确确认后](../../tests/browser/artifacts/2026-09-11-review-fix-final/sources-explicitly-confirmed.png)。
 
 没有点击外部来源链接或触发重新检索；`example.invalid` 仅用于合成候选的可识别占位地址。
 
-另在同一独立合成服务检查默认报告日期：省略 date、指定 `Pacific/Kiritimati` 时，该时区日期为 **2026-09-11**；GET report 返回相同日期。此项为额外 API 回归，不计入前述 21 项浏览器检查。[结果](../../tests/browser/artifacts/2026-09-11-build-final-rerun/default-report-date.json)
+另在同一独立合成服务检查默认报告日期：省略 date、指定 `Pacific/Kiritimati` 时，该时区日期为 **2026-09-11**；GET report 返回相同日期。此项为额外 API 回归，不计入前述 21 项浏览器检查。[结果](../../tests/browser/artifacts/2026-09-11-review-fix-final/default-report-date.json)
 
 ## 复现入口
 

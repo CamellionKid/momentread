@@ -1,16 +1,16 @@
 {
   "synthetic": true,
   "realModelInvocations": 0,
-  "startedAt": "2026-09-10T22:55:22.093Z",
-  "finishedAt": "2026-09-10T22:55:33.630Z",
+  "startedAt": "2026-09-10T23:10:35.609Z",
+  "finishedAt": "2026-09-10T23:10:46.644Z",
   "repo": "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead",
-  "dataDir": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-GBcnt0",
-  "output": "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun",
-  "clientSnapshot": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-GBcnt0/candidate/dist/client",
+  "dataDir": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-DnCvsD",
+  "output": "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final",
+  "clientSnapshot": "/var/folders/_w/djf0cg651nx1pcq_7gzf7nyc0000gn/T/momentread-browser-scale-DnCvsD/candidate/dist/client",
   "clientFiles": [
     {
-      "file": "assets/epub-BGd4-WIx.js",
-      "sha256": "559d060f31506428c06a0c886082939d4475c14e45efb52014248fbae317959c",
+      "file": "assets/epub-BvGnvWai.js",
+      "sha256": "d92710e02dba132c00e8147d48f2a97013c57d70ad35827f736c50f43b29ae09",
       "bytes": 25749
     },
     {
@@ -19,9 +19,9 @@
       "bytes": 44916
     },
     {
-      "file": "assets/index-pFKU6AIF.js",
-      "sha256": "8b7cff3c84e0bc9c4bc25996f6a8fcf21101c8d4e25b05c99f13008f1b8a14da",
-      "bytes": 493178
+      "file": "assets/index-CLYZd9FP.js",
+      "sha256": "16156236a2c81ee5bb2dd4caef05c49c341c75aa730925d78291562adf9666f5",
+      "bytes": 493190
     },
     {
       "file": "assets/paginator-N8f9xScz.js",
@@ -30,7 +30,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "4fd26132cbbdd42a8c6cdf029f45da920bb01c8ccd51009a8637d42b8f87cdcb",
+      "sha256": "2ee1c6fb29fe80086f79a497dea9989d63894da9def0e09ea67c3b3fb0a335cc",
       "bytes": 365
     }
   ],

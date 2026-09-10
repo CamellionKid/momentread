@@ -89,6 +89,14 @@ export function webSearchResultCount(content: unknown, query?: string): number |
   return urls.size;
 }
 
+export function hasSuccessfulWebSearchResult(
+  results: Array<{toolName: string; success: boolean; resultCount?: number}> | undefined,
+): boolean {
+  return !!results?.some(
+    result => result.toolName === 'WebSearch' && result.success && (result.resultCount ?? 0) > 0,
+  );
+}
+
 const errorMessages: Record<string, {code: string; message: string}> = {
   authentication_failed: {code: 'CLI_AUTH_REQUIRED', message: 'Claude 服务拒绝了认证，请检查既有登录或连接凭据后重试。'},
   oauth_org_not_allowed: {code: 'CLI_ACCESS_DENIED', message: '当前 Claude 账户未获组织授权，请检查账户访问权限。'},

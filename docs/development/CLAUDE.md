@@ -110,7 +110,7 @@ CLI initialized.model 均为 `claude-opus-4-8[1m]`；此次 first 和 search 明
 
 WebSearch 这次没有复现早先 403，不能继续把当前失败归因为 403，也不能仅凭一次空查询认定 provider 永久不支持搜索。观察事实是：同一配置的普通推理和固定 URL 取回恢复，公开搜索没有给出本次查询的有效结果。没有为寻找成功截图而重复搜索或切换供应商。
 
-复验原始日志位于本机忽略目录 `tmp/claude-recovery/`。首次 search 探针当时只检查 is_error，退出码 0 曾造成过宽的成功判定；已修正探针，新增 resultCount 和 query／REMINDER 排除测试。对该真实工具结果离线重放得到 `transportSuccess=true/resultCount=0/searchAcceptancePassed=false`，未额外发起模型调用。22 项 Claude 协议测试及全仓类型检查通过；这不代替完整系统与盲测验收。
+复验原始日志位于本机忽略目录 `tmp/claude-recovery/`。首次 search 探针当时只检查 is_error，退出码 0 曾造成过宽的成功判定；已修正探针，新增 resultCount 和 query／REMINDER 排除测试。对该真实工具结果离线重放得到 `transportSuccess=true/resultCount=0/searchAcceptancePassed=false`，未额外发起模型调用。24 项 Claude 模块测试覆盖空搜索门槛及瞬时 API 错误后恢复；全仓类型检查通过。这不代替完整系统与盲测验收。
 
 ## 来源
 

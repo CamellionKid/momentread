@@ -3,7 +3,7 @@ import {mkdtemp, writeFile, chmod, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {JsonLineDecoder, TextAccumulator, redactDiagnostic, classifyCliFailure, webSearchResultCount} from '../../server/ai/protocol';
+import {JsonLineDecoder, TextAccumulator, redactDiagnostic, classifyCliFailure, hasSuccessfulWebSearchResult, webSearchResultCount} from '../../server/ai/protocol';
 import {claudeArguments, createClaudeAdapter} from '../../server/ai/index';
 import type {StartRun} from '../../shared/contracts/ports';
 import type {RunEvent} from '../../shared/contracts/index';
@@ -189,6 +189,24 @@ describe('Claude process policy', () => {
       expect(events.find(event => event.type === 'text_delta')).toMatchObject({data: {text: 'Example: API Error: 429 is an error label.'}});
       expect(events.at(-1)).toMatchObject({type: 'completed', data: {sessionReusable: true}});
     } finally { await fake.cleanup(); }
+  });
+  it('allows an explicit successful result after a transient API error packet', async () => {
+    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:1,error:'server_error',error_status:500}));console.log(JSON.stringify({type:'assistant',error:'server_error',isApiErrorMessage:true,message:{id:'transient',content:[{type:'text',text:'API Error: HTTP 500 token=secret'}]}}));console.log(JSON.stringify({type:'assistant',message:{id:'recovered',content:[{type:'text',text:'恢复后的正文'}]}}));${result}}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const handle = await adapter.start(request()); const events: RunEvent[] = [];
+      for await (const event of handle.events) events.push(event);
+      expect(events.filter(event => event.type === 'text_delta').map(event => event.data.text).join('')).toBe('恢复后的正文');
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {text: '完成', sessionReusable: true}});
+      expect(JSON.stringify(events)).not.toContain('secret');
+    } finally { await fake.cleanup(); }
+  });
+  it('requires a successful WebSearch result with a positive explicit count', () => {
+    expect(hasSuccessfulWebSearchResult(undefined)).toBe(false);
+    expect(hasSuccessfulWebSearchResult([{toolName: 'WebSearch', success: true, resultCount: 0}])).toBe(false);
+    expect(hasSuccessfulWebSearchResult([{toolName: 'WebFetch', success: true, resultCount: 2}])).toBe(false);
+    expect(hasSuccessfulWebSearchResult([{toolName: 'WebSearch', success: false, resultCount: 2}])).toBe(false);
+    expect(hasSuccessfulWebSearchResult([{toolName: 'WebSearch', success: true, resultCount: 2}])).toBe(true);
   });
   it('retains a known service error category when the application deadline interrupts retries', async () => {
     const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:5000,error:'rate_limit',error_status:429}));}}`);

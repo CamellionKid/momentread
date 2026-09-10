@@ -464,7 +464,12 @@ export function ReportPage({
     timezone,
     attempt?.runId,
   );
-  const active = !!attempt?.submitting || !!(latest && isActiveRun(latest));
+  const acceptedRunNotObserved =
+    !!attempt?.runId && !state.runs.some((run) => run.id === attempt.runId);
+  const active =
+    !!attempt?.submitting ||
+    acceptedRunNotObserved ||
+    !!(latest && isActiveRun(latest));
   const failed =
     !active &&
     !!(

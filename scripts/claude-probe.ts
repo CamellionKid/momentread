@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {createClaudeAdapter} from '../server/ai/index';
 import type {StartRun} from '../shared/contracts/ports';
 import type {RunEvent} from '../shared/contracts/index';
+import {hasSuccessfulWebSearchResult} from '../server/ai/protocol';
 
 // Explicit opt-in: real requests consume the user's already-configured Claude quota.
 if (!process.argv.includes('--live')) {
@@ -37,7 +38,7 @@ async function run(request: StartRun, options: {cancel?: boolean; deny?: boolean
   if (request.purpose === 'matching' && !options.deny) {
     const results = terminal?.data.toolResults as Array<{toolName: string; success: boolean; resultCount?: number}> | undefined;
     if (!results?.length || results.some(result => !result.success)) process.exitCode = 1;
-    if (mode === 'search' && !results?.some(result => result.toolName === 'WebSearch' && result.success && (result.resultCount ?? 0) > 0)) {
+    if (mode === 'search' && !hasSuccessfulWebSearchResult(results)) {
       console.log(JSON.stringify({check: 'search_returned_result_links', passed: false, reason: 'No explicit result links were observed in the actual search tool response.'}));
       process.exitCode = 1;
     }

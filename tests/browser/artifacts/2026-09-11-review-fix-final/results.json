@@ -4,12 +4,12 @@
   "url": "http://127.0.0.1:4325",
   "discussionCount": 500,
   "pathLength": 20,
-  "startedAt": "2026-09-10T22:55:22.649Z",
+  "startedAt": "2026-09-10T23:10:36.161Z",
   "checks": [
     {
       "name": "1487x1058 panels and input remain inside the viewport",
       "status": "passed",
-      "durationMs": 22,
+      "durationMs": 43,
       "detail": {
         "dimensions": {
           "width": 1487,
@@ -40,7 +40,7 @@
     {
       "name": "1487x1058 500 nodes use full-size scrollable layout",
       "status": "passed",
-      "durationMs": 7,
+      "durationMs": 8,
       "detail": {
         "count": 500,
         "clientWidth": 230,
@@ -55,7 +55,7 @@
     {
       "name": "1487x1058 complete ancestor dialog exposes all 20 levels",
       "status": "passed",
-      "durationMs": 124,
+      "durationMs": 116,
       "detail": {
         "pathItems": [
           "1段落解析",
@@ -90,7 +90,7 @@
     {
       "name": "1487x1058 branch folding preserves the active path and expands back to 500",
       "status": "passed",
-      "durationMs": 206,
+      "durationMs": 214,
       "detail": {
         "folded": 44,
         "expanded": 500
@@ -99,16 +99,16 @@
     {
       "name": "1487x1058 switching sibling nodes preserves independent drafts",
       "status": "passed",
-      "durationMs": 868,
+      "durationMs": 825,
       "detail": {
-        "durationMs": 868,
+        "durationMs": 825,
         "savedDraft": "规模浏览器草稿 1487x1058：只属于同级 001。"
       }
     },
     {
       "name": "1487x1058 long discussion scrolls independently and Markdown stays contained",
       "status": "passed",
-      "durationMs": 102,
+      "durationMs": 101,
       "detail": {
         "initial": {
           "scrollTop": 0,
@@ -125,7 +125,7 @@
     {
       "name": "1280x720 panels and input remain inside the viewport",
       "status": "passed",
-      "durationMs": 18,
+      "durationMs": 17,
       "detail": {
         "dimensions": {
           "width": 1280,
@@ -156,7 +156,7 @@
     {
       "name": "1280x720 500 nodes use full-size scrollable layout",
       "status": "passed",
-      "durationMs": 5,
+      "durationMs": 8,
       "detail": {
         "count": 500,
         "clientWidth": 185,
@@ -171,7 +171,7 @@
     {
       "name": "1280x720 complete ancestor dialog exposes all 20 levels",
       "status": "passed",
-      "durationMs": 101,
+      "durationMs": 111,
       "detail": {
         "pathItems": [
           "1段落解析",
@@ -206,7 +206,7 @@
     {
       "name": "1280x720 branch folding preserves the active path and expands back to 500",
       "status": "passed",
-      "durationMs": 178,
+      "durationMs": 177,
       "detail": {
         "folded": 44,
         "expanded": 500
@@ -215,16 +215,16 @@
     {
       "name": "1280x720 switching sibling nodes preserves independent drafts",
       "status": "passed",
-      "durationMs": 881,
+      "durationMs": 838,
       "detail": {
-        "durationMs": 881,
+        "durationMs": 838,
         "savedDraft": "规模浏览器草稿 1280x720：只属于同级 001。"
       }
     },
     {
       "name": "1280x720 long discussion scrolls independently and Markdown stays contained",
       "status": "passed",
-      "durationMs": 96,
+      "durationMs": 102,
       "detail": {
         "initial": {
           "scrollTop": 685,
@@ -272,7 +272,7 @@
     {
       "name": "390x844 500 nodes use full-size scrollable layout",
       "status": "passed",
-      "durationMs": 5,
+      "durationMs": 6,
       "detail": {
         "count": 500,
         "clientWidth": 82,
@@ -287,7 +287,7 @@
     {
       "name": "390x844 complete ancestor dialog exposes all 20 levels",
       "status": "passed",
-      "durationMs": 78,
+      "durationMs": 99,
       "detail": {
         "pathItems": [
           "1段落解析",
@@ -322,7 +322,7 @@
     {
       "name": "390x844 branch folding preserves the active path and expands back to 500",
       "status": "passed",
-      "durationMs": 218,
+      "durationMs": 196,
       "detail": {
         "folded": 44,
         "expanded": 500
@@ -331,16 +331,16 @@
     {
       "name": "390x844 switching sibling nodes preserves independent drafts",
       "status": "passed",
-      "durationMs": 917,
+      "durationMs": 969,
       "detail": {
-        "durationMs": 917,
+        "durationMs": 969,
         "savedDraft": "规模浏览器草稿 390x844：只属于同级 001。"
       }
     },
     {
       "name": "390x844 long discussion scrolls independently and Markdown stays contained",
       "status": "passed",
-      "durationMs": 102,
+      "durationMs": 101,
       "detail": {
         "initial": {
           "scrollTop": 1285,
@@ -357,7 +357,7 @@
     {
       "name": "1487x1058 editable summary dialog and its controls are reachable",
       "status": "passed",
-      "durationMs": 97,
+      "durationMs": 83,
       "detail": {
         "rect": {
           "x": 418.5,
@@ -375,7 +375,7 @@
     {
       "name": "1280x720 editable summary dialog and its controls are reachable",
       "status": "passed",
-      "durationMs": 44,
+      "durationMs": 47,
       "detail": {
         "rect": {
           "x": 315,
@@ -393,7 +393,7 @@
     {
       "name": "390x844 editable summary dialog and its controls are reachable",
       "status": "passed",
-      "durationMs": 32,
+      "durationMs": 39,
       "detail": {
         "rect": {
           "x": 16,
@@ -410,24 +410,24 @@
     }
   ],
   "screenshots": [
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-discussion.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-path-dialog.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-folded.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-discussion.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-path-dialog.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-folded.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-reading.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-discussion.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-path-dialog.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-folded.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1487x1058-summary-dialog.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/1280x720-summary-dialog.png",
-    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-build-final-rerun/390x844-summary-dialog.png"
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/390x844-reading.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/390x844-discussion.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/390x844-path-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/390x844-folded.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1487x1058-summary-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/1280x720-summary-dialog.png",
+    "/Users/camellionkid/Desktop/Codex WorkArea/APP Project/MomentRead/tests/browser/artifacts/2026-09-11-review-fix-final/390x844-summary-dialog.png"
   ],
   "pageErrors": [],
   "outboundRequests": [],
   "browserVersion": "153.0.8010.36",
-  "finishedAt": "2026-09-10T22:55:31.418Z",
+  "finishedAt": "2026-09-10T23:10:44.610Z",
   "passed": 21,
   "failed": 0
 }

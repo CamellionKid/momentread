@@ -359,11 +359,9 @@ export function DiscussionPane(props: Props) {
             <div className="notice product-run-error" role="status">
               <p>{lastRun.error || "这次生成未完成，已保存的内容仍保留。"}</p>
               <small>
-                {activeRun
-                  ? "当前生成完成后，可以继续提问。"
-                  : hasCompleteAnswer
-                    ? "可以在下方重新提问，或重新整理已有完整回答。"
-                    : "可以在下方重新提问；获得完整回答后再整理。"}
+                {hasCompleteAnswer
+                  ? "可以在下方重新提问，或重新整理已有完整回答。"
+                  : "可以在下方重新提问；获得完整回答后再整理。"}
               </small>
             </div>
           )}

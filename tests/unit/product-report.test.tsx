@@ -74,6 +74,7 @@ let updateState: React.Dispatch<React.SetStateAction<BookState>>;
 let advice: string;
 let postCount: number;
 let postError: string | undefined;
+let observeAcceptedRun: boolean;
 const onError = vi.fn();
 
 function Harness({ initial }: { initial: BookState }) {
@@ -91,18 +92,20 @@ function Harness({ initial }: { initial: BookState }) {
           targetDate,
           targetTimezone,
         );
-        setState((previous) => ({
-          ...previous,
-          runs: [
-            ...previous.runs,
-            dailyRun({
-              id: accepted.runId,
-              bookId: previous.book.id,
-              reportTarget: { date: targetDate, timezone: targetTimezone },
-              createdAt: `2026-09-10T00:00:0${postCount}.000Z`,
-            }),
-          ],
-        }));
+        if (observeAcceptedRun) {
+          setState((previous) => ({
+            ...previous,
+            runs: [
+              ...previous.runs,
+              dailyRun({
+                id: accepted.runId,
+                bookId: previous.book.id,
+                reportTarget: { date: targetDate, timezone: targetTimezone },
+                createdAt: `2026-09-10T00:00:0${postCount}.000Z`,
+              }),
+            ],
+          }));
+        }
         return accepted;
       }}
     />
@@ -160,6 +163,7 @@ beforeEach(() => {
   advice = "";
   postCount = 0;
   postError = undefined;
+  observeAcceptedRun = true;
   onError.mockClear();
   vi.stubGlobal(
     "fetch",
@@ -211,6 +215,29 @@ afterEach(async () => {
 });
 
 describe("daily report asynchronous failure and recovery", () => {
+  it("keeps an accepted run disabled until refreshed state observes it", async () => {
+    observeAcceptedRun = false;
+    await mount();
+    await click("生成总结与建议");
+    expect(postCount).toBe(1);
+    expect(button("正在生成总结…").disabled).toBe(true);
+    await click("正在生成总结…");
+    expect(postCount).toBe(1);
+
+    await act(async () => {
+      updateState((previous) => ({
+        ...previous,
+        runs: [
+          dailyRun({
+            id: "accepted-1",
+            status: "completed",
+            result: { advice: "完成", date, timezone, summaryIds: [] },
+          }),
+        ],
+      }));
+    });
+    expect(button("生成总结与建议").disabled).toBe(false);
+  });
   it("shows live retry feedback only for the displayed daily run", async () => {
     const active = {
       ...initialState(),

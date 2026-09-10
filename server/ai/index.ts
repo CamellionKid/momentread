@@ -174,7 +174,12 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
     if (message.type === 'result') {
       if (state.result) return;
       state.result = message;
-      if ((message.is_error || message.subtype !== 'success') && !state.apiFailure) {
+      if (!message.is_error && message.subtype === 'success') {
+        // Retry packets describe individual attempts. An explicit successful
+        // terminal result supersedes their transient failure classification.
+        state.apiFailure = undefined;
+        state.lastRetry = undefined;
+      } else if (!state.apiFailure) {
         const diagnostic = [...(Array.isArray(message.errors) ? message.errors.filter((value: unknown) => typeof value === 'string') : []), typeof message.result === 'string' ? message.result : ''].join('\n');
         const classified = classifyCliFailure(undefined, undefined, diagnostic);
         state.apiFailure = classified.errorCategory === 'unknown' ? state.lastRetry : classified;
