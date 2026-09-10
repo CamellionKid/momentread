@@ -7,7 +7,7 @@ import {z} from 'zod';
 import {AnalysisRequestSchema,BranchRequestSchema,ConfirmRequestSchema,PositionSchema,Id,AppError,now,type BookState,type Run,type RunEvent} from '../shared/contracts/index';
 import type {Store,BookLibrary,ClaudeAdapter,LearningService,MatchingService} from '../shared/contracts/ports';
 import {RunManager} from './runs';
-import {buildReport,renderReport} from './exports/index';
+import {buildReport,renderReport,dayAt} from './exports/index';
 
 type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number};
 export function createApp(services:Services){
@@ -50,7 +50,7 @@ export function createApp(services:Services){
  app.get('/api/runs/:id/events',c=>{const id=Id.parse(c.req.param('id'));required(store.get('runs',id));const raw=c.req.header('last-event-id')??c.req.query('after')??'0';let seq=Number(raw);if(!Number.isSafeInteger(seq)||seq<0)throw new AppError('INVALID_CURSOR','运行事件位置无效。');return streamSSE(c,async stream=>{let aborted=false;stream.onAbort(()=>{aborted=true});while(!aborted){for(const event of store.events(id,seq)){await stream.writeSSE({id:String(event.seq),event:'run',data:JSON.stringify(event)});seq=event.seq}const run=store.get('runs',id)!;if(['completed','failed','cancelled','interrupted'].includes(run.status))break;await stream.sleep(250)}})});
  app.post('/api/runs/:id/cancel',async c=>{await runs.cancel(Id.parse(c.req.param('id')));return c.json({ok:true})});
  app.post('/api/runs/:id/permission',async c=>{const p=PermissionRequestSchema.parse(await c.req.json());await runs.permission(Id.parse(c.req.param('id')),p.requestId,p.decision);return c.json({ok:true})});
- const reportParams=(c:any)=>({date:c.req.query('date')||new Date().toISOString().slice(0,10),timezone:c.req.query('timezone')||Intl.DateTimeFormat().resolvedOptions().timeZone});
+ const reportParams=(c:any)=>{const timezone=c.req.query('timezone')||Intl.DateTimeFormat().resolvedOptions().timeZone;return {date:c.req.query('date')||dayAt(now(),timezone),timezone}};
  app.get('/api/books/:id/report',c=>{const p=reportParams(c);return c.json(buildReport(store,c.req.param('id'),p.date,p.timezone))});
  app.get('/api/books/:id/report.html',c=>{const p=reportParams(c);c.header('Content-Type','text/html; charset=utf-8');c.header('Content-Disposition','attachment; filename="MomentRead-reading-summary.html"');return c.body(renderReport(buildReport(store,c.req.param('id'),p.date,p.timezone)))});
  app.post('/api/books/:id/report',async c=>{const p=reportParams(c);const report=buildReport(store,c.req.param('id'),p.date,p.timezone);const d=store.list('discussions',report.book.id).at(-1);if(!d)throw new AppError('NO_DISCUSSION','先完成一次选段讨论，再生成总结。');const ctx={id:randomUUID(),bookId:d.bookId,discussionId:d.id,discussionRevision:d.revision,input:`只根据以下真实记录用中文写阅读总结、未解问题和下一次阅读建议。不得推测掌握率或阅读时长。原文待核的内容保留不确定。\n${JSON.stringify({book:report.book.title,date:report.date,chapter:report.activities.at(-1)?.chapter,summaries:report.summaries.map(s=>s.content),concepts:report.concepts.map(s=>({term:s.title,context:s.context}))})}`,messageIds:[],summaryDependencies:report.summaries.map(s=>({summaryId:s.id,version:s.version})),sourceIds:[],createdAt:now()};store.put('contexts',ctx);const run=await runs.start(ctx,'daily',{result:e=>({advice:String(e.data.text??''),date:p.date,timezone:p.timezone,summaryIds:report.summaries.map(s=>s.id)})});return c.json({runId:run.id},202)});
