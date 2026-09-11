@@ -85,6 +85,7 @@ describe("Markdown rendering with exact source selection", () => {
       start,
       end: start + 2,
       exact: "理性",
+      displayText: "理性",
     });
   });
   it("maps a selection across strong, emphasis, links and inline code to one original slice", () => {
@@ -99,8 +100,20 @@ describe("Markdown rendering with exact source selection", () => {
     expect(origin?.exact).toBe(
       "理性**与*判断*和[经验](https://example.com)及`范畴",
     );
+    expect(origin?.displayText).toBe("理性与判断和经验及范畴");
     expect(origin?.start).toBe(source.indexOf("理性"));
     expect(source.slice(origin!.start, origin!.end)).toBe(origin?.exact);
+  });
+  it("keeps rendered text separate from Markdown delimiters at selection boundaries", () => {
+    const source = "**塑造人物的权威形象**。作者列举了三个例子。";
+    const host = render(source);
+    const origin = selectedMessageOrigin(
+      host,
+      message(source),
+      select(host, "造人物的权威形象。作者列举"),
+    );
+    expect(origin?.exact).toBe("造人物的权威形象**。作者列举");
+    expect(origin?.displayText).toBe("造人物的权威形象。作者列举");
   });
   it("decodes entity and escaped punctuation while preserving raw source offsets", () => {
     const source = "这是 &amp;、&#x1F9ED;、\\*星号\\* 和 &copy;。";
@@ -190,7 +203,13 @@ describe("Markdown rendering with exact source selection", () => {
   });
   it("extracts readable concept provenance without exposing IDs or CFI", () => {
     const context = JSON.stringify({
-      origin: { messageId: "private-id", start: 3, end: 5, exact: "理性" },
+      origin: {
+        messageId: "private-id",
+        start: 3,
+        end: 5,
+        exact: "理性**",
+        displayText: "理性",
+      },
       source: {
         bookId: "book-id",
         segments: [

@@ -18,7 +18,7 @@ export function readableConceptContext(
       text: typeof data === "string" ? data : "暂无可读的来源说明。",
     };
   const record = data as Record<string, unknown>,
-    origin = record.origin as { exact?: unknown } | null,
+    origin = record.origin as { exact?: unknown; displayText?: unknown } | null,
     source = record.source as { segments?: unknown } | null;
   const segments = Array.isArray(source?.segments)
     ? source.segments.flatMap((item) =>
@@ -35,7 +35,12 @@ export function readableConceptContext(
     : [];
   return {
     kind: "structured",
-    origin: typeof origin?.exact === "string" ? origin.exact : "",
+    origin:
+      typeof origin?.displayText === "string"
+        ? origin.displayText
+        : typeof origin?.exact === "string"
+          ? origin.exact
+          : "",
     segments,
   };
 }

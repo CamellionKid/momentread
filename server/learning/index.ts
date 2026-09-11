@@ -126,12 +126,13 @@ export function createLearningService(store: Store): LearningService {
       if (origin.status !== 'complete') throw new AppError('INCOMPLETE_ORIGIN', '请等待这条回复完整生成后再展开概念。', 409);
       const parentBackground = currentBackground(parent); const originIndex = parentBackground.messages.findIndex(m => m.id === origin.id);
       parentBackground.messages = parentBackground.messages.slice(0, originIndex + 1);
+      const selectedText = request.origin.displayText?.trim() || request.origin.exact;
       const node: Discussion = {id: randomUUID(), bookId: parent.bookId, parentId: parent.id, rootId: parent.rootId, title: request.title.trim(), source: null, origin: request.origin, draft: '', scrollTop: 0, revision: 0, needsMerge: false, createdAt: now()};
       if (!node.title) throw new AppError('EMPTY_TITLE', '概念名称不能为空。');
       store.put('discussions', node);
-      const snapshot = makeContext(node, 'discussion', `请解释父讨论中选出的“${request.origin.exact}”，并说明其在本书这段内容中的含义。`, [...baseline(parent), parentBackground]);
+      const snapshot = makeContext(node, 'discussion', `请解释父讨论中选出的“${selectedText}”，并说明其在本书这段内容中的含义。`, [...baseline(parent), parentBackground]);
       store.setIdempotent(`learning:baseline:${node.id}`, {contextId: snapshot.id});
-      service.appendUser(node.id, `请解释“${request.title.trim()}”，结合父讨论中选出的这段内容：${request.origin.exact}`);
+      service.appendUser(node.id, `请解释“${request.title.trim()}”，结合父讨论中选出的这段内容：${selectedText}`);
       return discussion(node.id);
     });},
     buildInput(id, purpose, question = '') {return store.transaction(() => {const node = discussion(id); lineage(node); return makeContext(node, purpose, question);});},

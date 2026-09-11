@@ -26,7 +26,13 @@ import { RunRetryNotice, type RunRetry } from "./RunRetryNotice";
 export type BranchSelection = {
   visibleText: string;
   parentId: string;
-  origin: { messageId: string; start: number; end: number; exact: string };
+  origin: {
+    messageId: string;
+    start: number;
+    end: number;
+    exact: string;
+    displayText?: string;
+  };
 };
 interface Props {
   state: BookState;
@@ -234,7 +240,8 @@ export function DiscussionPane(props: Props) {
       >
         <div className="source-quote">
           <p>
-            {node.origin?.exact ??
+            {node.origin?.displayText ??
+              node.origin?.exact ??
               root?.source?.segments.map((s) => s.exact).join("\n\n") ??
               ""}
           </p>

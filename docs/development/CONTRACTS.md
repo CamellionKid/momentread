@@ -6,6 +6,8 @@ Store 为 SQLite 持久化的具名实体集合，所有 put 使用对应 Zod sc
 
 Reader 为 forwardRef React 组件，导出 EpubReader，实现 ReaderProps/ReaderHandle。读取 /api/files/:id；只通过事件返回来源和位置。禁止用文字 includes 代替 CFI，来源绑定精确文件版本。
 
+AI 回答中的分支选区同时保存原始 Markdown 的 `exact` 与渲染后可读的可选 `displayText`。`exact` 继续用于消息偏移、来源校验和可追溯性；讨论引用、分支提示词与概念档案优先使用 `displayText`，避免把 `**`、链接目标等排版源码泄漏到学习内容。旧记录没有 `displayText` 时回退到 `exact`。
+
 AI 导出 createClaudeAdapter(options?)，实现 ClaudeAdapter。事件 envelope 均携带 runId/bookId/discussionId/seq；适配器只负责 CLI 和协议，产品运行管理及写库由总负责人处理。讨论和整理禁用工具；matching 只允许 WebSearch/WebFetch（正常权限、不 bypass）。取消先正常中断，强停会话不得接续。不得读取用户其他会话。
 
 生产 HTTP 统一 /api，错误 {error:{code,message,retryable},requestId}。启动运行返回 {runId}；SSE id 为 seq，支持 Last-Event-ID，重连不新建运行。实体查询返回对象，列表返回数组。后续路由说明与 OpenAPI 由同一 schema 生成。

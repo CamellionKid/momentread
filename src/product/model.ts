@@ -66,6 +66,7 @@ export function messageOrigin(
   start: number,
   end: number,
   exact: string,
+  displayText = exact,
 ) {
   if (
     message.role !== "assistant" ||
@@ -75,7 +76,7 @@ export function messageOrigin(
     message.text.slice(start, end) !== exact
   )
     throw new Error("请在已完成的 AI 回答中重新选择概念。");
-  return { messageId: message.id, start, end, exact };
+  return { messageId: message.id, start, end, exact, displayText };
 }
 export function selectedMessageOrigin(
   element: HTMLElement,
@@ -97,7 +98,13 @@ export function selectedMessageOrigin(
     const mapped = mappedMarkdownSelection(element, message.text, selection);
     if (!mapped)
       throw new Error("这段排版文字无法准确定位，请缩小选区后重试。");
-    return messageOrigin(message, mapped.start, mapped.end, mapped.exact);
+    return messageOrigin(
+      message,
+      mapped.start,
+      mapped.end,
+      mapped.exact,
+      mapped.visible,
+    );
   }
   const before = range.cloneRange();
   before.selectNodeContents(element);

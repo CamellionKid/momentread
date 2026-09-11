@@ -57,6 +57,17 @@ describe('learning source and branch boundaries', () => {
     const a = f.service.createBranch({parentId: root.id, title: '判断', origin}); const b = f.service.createBranch({parentId: root.id, title: '判断', origin});
     expect(a.id).not.toBe(b.id); expect(a.parentId).toBe(root.id); expect(a.rootId).toBe(root.id);
   });
+  it('preserves raw Markdown provenance but uses rendered text in branch prompts', () => {
+    const f = fixture(); const root = f.root(); const message = f.answer(root, '**塑造人物的权威形象**。作者列举');
+    const exact = '造人物的权威形象**。作者列举'; const start = message.text.indexOf(exact); const displayText = '造人物的权威形象。作者列举';
+    const child = f.service.createBranch({parentId: root.id, title: '权威形象', origin: {messageId: message.id, start, end: start + exact.length, exact, displayText}});
+    expect(child.origin).toMatchObject({exact, displayText});
+    const created = f.store.list('contexts', f.book.id).find(context => context.discussionId === child.id)!;
+    const input = JSON.parse(created.input);
+    expect(input.question).toContain(displayText); expect(input.question).not.toContain('**');
+    const childMessage = f.store.list('messages', f.book.id).find(item => item.discussionId === child.id)!;
+    expect(childMessage.text).toContain(displayText); expect(childMessage.text).not.toContain('**');
+  });
   it('rejects incomplete replies and cyclic or cross-book ancestry', () => {
     const f = fixture(); const root = f.root(); const message = f.answer(root); f.store.put('messages', {...message, status: 'interrupted'});
     expect(() => f.service.createBranch({parentId: root.id, title: '判断', origin: {messageId: message.id, start: 0, end: 2, exact: '判断'}})).toThrow('完整生成');

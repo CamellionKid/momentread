@@ -3766,6 +3766,11 @@
                   "exact": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "displayText": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
                   }
                 },
                 "required": [
@@ -4650,6 +4655,11 @@
               "exact": {
                 "type": "string",
                 "minLength": 1
+              },
+              "displayText": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
               }
             },
             "required": [
@@ -5049,6 +5059,11 @@
                         "exact": {
                           "type": "string",
                           "minLength": 1
+                        },
+                        "displayText": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 20000
                         }
                       },
                       "required": [
@@ -6028,6 +6043,11 @@
                         "exact": {
                           "type": "string",
                           "minLength": 1
+                        },
+                        "displayText": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 20000
                         }
                       },
                       "required": [
