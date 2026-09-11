@@ -36,6 +36,7 @@
   height: 100%;
 }
 .product-app .discussion-panel {
+  position: relative;
   min-height: 0;
 }
 .product-app .discussion-scroll {
@@ -144,6 +145,9 @@
 .product-selection-bar .icon-button {
   width: 24px;
   flex-shrink: 0;
+}
+.discussion-selection-bar {
+  bottom: 96px;
 }
 .product-discussion-empty {
   padding: 75px 30px;

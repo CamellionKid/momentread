@@ -7,6 +7,7 @@ import {
   ArrowCounterClockwise,
   MapPin,
   Stop,
+  X,
 } from "@phosphor-icons/react";
 import type {
   BookState,
@@ -324,21 +325,7 @@ export function DiscussionPane(props: Props) {
             </div>
             {message.role === "assistant" && message.status === "complete" && (
               <div className="answer-actions">
-                <button
-                  className="text-button"
-                  disabled={selection?.origin.messageId !== message.id}
-                  onClick={() => {
-                    if (selection) props.onBranch(selection);
-                  }}
-                >
-                  <GitBranch size={16} /> 展开选中的概念
-                </button>
-                <span
-                  className="quiet-note"
-                  role={selectionError ? "status" : undefined}
-                >
-                  {selectionError || "先在回答中选中文字"}
-                </span>
+                <span className="quiet-note">先在回答中选中文字</span>
               </div>
             )}
           </article>
@@ -376,6 +363,41 @@ export function DiscussionPane(props: Props) {
           <p className="quiet-note">讨论已建立，可以在下方提问。</p>
         )}
       </div>
+      {(selection || selectionError) && (
+        <div className="product-selection-bar discussion-selection-bar">
+          <div>
+            <span>
+              {selection
+                ? `已选 ${selection.visibleText.length} 字`
+                : "选区无法展开"}
+            </span>
+            <p role={!selection && selectionError ? "status" : undefined}>
+              {selection ? selection.visibleText : selectionError}
+            </p>
+          </div>
+          {selection && (
+            <button
+              className="primary small"
+              onClick={() => {
+                props.onBranch(selection);
+                setSelection(null);
+              }}
+            >
+              <GitBranch size={16} /> 展开已选中的概念
+            </button>
+          )}
+          <button
+            className="icon-button"
+            aria-label="取消选中"
+            onClick={() => {
+              setSelection(null);
+              setSelectionError("");
+            }}
+          >
+            <X size={17} />
+          </button>
+        </div>
+      )}
       <div className="composer">
         <div className="composer-row">
           <div className="input-wrap">
