@@ -19,6 +19,7 @@ export interface ClaudeAdapterOptions {
   cwd?: string;
   binary?: string;
   model?: string;
+  maxStartMs?: number;
   maxRunMs?: number;
   shutdownGraceMs?: number;
   logger?: (diagnostic: string) => void;
@@ -29,6 +30,7 @@ type Active = {
   request: StartRun; proc: ChildProcessWithoutNullStreams; queue: AsyncQueue<RunEvent>;
   seq: number; permissions: Map<string, PendingPermission>; text: TextAccumulator;
   networkDecision?: NetworkDecision; toolRequestCounts: Map<string, number>;
+  runtimeDeadlineArmed: boolean;
   cancelled: boolean; forced: boolean; closed: boolean; failure?: {code: string; message: string};
   apiFailure?: CliFailure; lastRetry?: CliFailure;
   result?: Record<string, any>; sessionId?: string; closePromise: Promise<void>; resolveClose: () => void;
@@ -118,6 +120,14 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
     } else emit(state, 'failed', {...(state.apiFailure || state.lastRetry || {code: state.forced ? 'CLI_SHUTDOWN_TIMEOUT' : 'CLI_RUN_FAILED', message: state.result?.subtype === 'error_max_turns' ? 'AI 达到运行上限，请缩短问题后重试。' : 'AI 运行未正常完成，请检查 Claude Code 登录和服务状态后重试。'}), sessionReusable: false});
     state.closed = true; state.permissions.clear(); state.queue.close(); runs.delete(state.request.runId); state.resolveClose();
   };
+  const armDeadline = (state: Active, delayMs: number) => {
+    clearTimeout(state.timer);
+    state.timer = setTimeout(() => {
+      const known = state.apiFailure || (state.lastRetry?.errorCategory !== 'unknown' ? state.lastRetry : undefined);
+      if (known) { state.failure = known; stop(state); }
+      else fail(state, 'CLI_TIMEOUT', 'AI 运行超时，内容已保留，可以重试。');
+    }, delayMs);
+  };
   const handle = (state: Active, message: Record<string, any>) => {
     if (state.cancelled || state.failure || state.closed) return;
     if (message.type === 'system' && message.subtype === 'init') {
@@ -129,6 +139,10 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       if (typeof message.session_id !== 'string' || !uuid.test(message.session_id)) { fail(state, 'CLI_PROTOCOL_INVALID', 'AI 未返回有效会话标识。'); return; }
       if (state.request.session.mode === 'resume' && message.session_id !== state.request.session.cliSessionId) { fail(state, 'CLI_SESSION_MISMATCH', 'AI 接续的会话与当前讨论不一致，已停止。'); return; }
       state.sessionId = message.session_id;
+      if (!state.runtimeDeadlineArmed) {
+        state.runtimeDeadlineArmed = true;
+        armDeadline(state, options.maxRunMs ?? 300000);
+      }
       emit(state, 'initialized', {cliSessionId: message.session_id, tools: actualTools, model: String(message.model || '')});
     }
     if (message.type === 'system' && message.subtype === 'api_retry') {
@@ -235,7 +249,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       const sessionId = request.session.mode === 'resume' ? request.session.cliSessionId : randomUUID();
       const proc = spawn(binary, claudeArguments(request, sessionId, options.model), {cwd, env: environment(), stdio: ['pipe', 'pipe', 'pipe']});
       let resolveClose!: () => void;
-      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolRequestCounts: new Map(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
+      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolRequestCounts: new Map(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], runtimeDeadlineArmed: false, cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
       runs.set(request.runId, state);
       const decoder = new JsonLineDecoder(message => handle(state, message));
       let stderrBytes = 0;
@@ -246,11 +260,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       proc.stdin.on('error', () => { if (!state.result && !state.cancelled) fail(state, 'CLI_INPUT_CLOSED', 'AI 输入通道已关闭，请重试。'); });
       proc.on('error', () => { state.failure = {code: 'CLI_START_FAILED', message: 'Claude Code 无法启动，请检查安装与执行权限。'}; finish(state, null); });
       proc.on('close', code => { if (stderrBytes) log(`Claude Code diagnostic output withheld (${stderrBytes} bytes).`); finish(state, code); });
-      state.timer = setTimeout(() => {
-        const known = state.apiFailure || (state.lastRetry?.errorCategory !== 'unknown' ? state.lastRetry : undefined);
-        if (known) { state.failure = known; stop(state); }
-        else fail(state, 'CLI_TIMEOUT', 'AI 运行超时，内容已保留，可以重试。');
-      }, options.maxRunMs ?? 300000);
+      armDeadline(state, options.maxStartMs ?? options.maxRunMs ?? 300000);
       write(state, {type: 'user', message: {role: 'user', content: [{type: 'text', text: request.input}]}});
       return {runId: request.runId, events: state.queue};
       } finally { starting.delete(request.runId); pending.resolve(); }

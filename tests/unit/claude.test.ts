@@ -238,10 +238,12 @@ describe('Claude process policy', () => {
   it('retains a known service error category when the application deadline interrupts retries', async () => {
     const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'system',subtype:'api_retry',attempt:1,max_retries:10,retry_delay_ms:5000,error:'rate_limit',error_status:429}));}}`);
     try {
-      const adapter = createClaudeAdapter({...fake, maxRunMs: 1000, shutdownGraceMs: 100});
+      const adapter = createClaudeAdapter({...fake, maxStartMs: 5000, maxRunMs: 100, shutdownGraceMs: 100});
       const handle = await adapter.start(request()); const events: RunEvent[] = [];
       for await (const event of handle.events) events.push(event);
+      expect(events.map(event => event.type)).toEqual(['initialized', 'retrying', 'failed']);
       expect(events.at(-1)).toMatchObject({type: 'failed', data: {code: 'CLI_RATE_LIMIT', errorCategory: 'rate_limit', status: 429, sessionReusable: false}});
+      expect(events.filter(event => ['completed', 'failed', 'cancelled'].includes(event.type))).toHaveLength(1);
     } finally { await fake.cleanup(); }
   });
   it('reports a completed but empty WebSearch as zero result links', async () => {
