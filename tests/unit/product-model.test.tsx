@@ -93,7 +93,13 @@ describe("product graph and exact message origins", () => {
     selection.addRange(range);
     expect(
       selectedMessageOrigin(el, message(el.textContent), selection),
-    ).toEqual({ messageId: "m", start: 3, end: 5, exact: "判断" });
+    ).toEqual({
+      messageId: "m",
+      start: 3,
+      end: 5,
+      exact: "判断",
+      displayText: "判断",
+    });
     el.remove();
   });
   it("rejects a selection crossing outside the message", () => {

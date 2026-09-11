@@ -82,6 +82,12 @@ npm run test:live -- first
 该命令会真实调用已配置模型并消耗其额度；返回完整中文结果且命令成功退出才算此项通过。搜索能力须单独验证，普通回复成功不代表 WebSearch 可用：
 
 ```sh
+npm run test:live -- language
+```
+
+`language` 使用三份不含私人书籍内容的合成阅读问题，实际检查自然简体中文以及标题、列表和加粗输出；任一回答混入拉丁字母即失败。它用于检查当前 provider 的输出质量，不能替代真实书籍界面盲测。
+
+```sh
 npm run test:live -- search
 ```
 
@@ -204,6 +210,7 @@ MOMENTREAD_TEST_EPUB='/absolute/path/to/authorized-book.epub' npm test -- tests/
 - [技术架构与已实现的选择](docs/ARCHITECTURE.md)
 - [UI／UX 设计](docs/design/UI-UX.md)、[生产界面接入](docs/development/PRODUCT-UI.md)
 - [公共契约](docs/development/CONTRACTS.md)、[HTTP 接口](docs/development/HTTP.md)、[OpenAPI](docs/development/openapi.json)
+- [开发状态](docs/development/STATUS.md)、[最终验收](docs/development/ACCEPTANCE.md)、[盲测记录](docs/development/BLIND-TEST.md)、[浏览器规模验收](docs/development/BROWSER-SCALE.md)
 - [ThoughtDAG 复用研究](docs/research/thoughtdag-reuse.md)、[foliate-js 来源与本地适配](vendor/foliate-js/README.momentread.md)
 
 本仓库使用 `main`；提交格式为 `[scope] short imperative description`。只暂存本次相关文件，凭据、书籍、学习数据、依赖和构建产物不进入 Git；当前没有公开发布或推送流程。

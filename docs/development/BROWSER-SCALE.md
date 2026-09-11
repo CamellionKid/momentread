@@ -4,20 +4,20 @@
 
 ## 环境与证据范围
 
-- 浏览器：Playwright 启动的可见 Google Chrome `152.0.7977.83`，使用独立临时 profile；未连接用户原生 Chrome profile，未更改浏览器权限。
-- 服务：`http://127.0.0.1:4325`，独立合成 SQLite／EPUB 数据目录。没有操作 root 的 4317 服务。
+- 浏览器：Playwright 启动的可见 Google Chrome `153.0.8010.36`，使用独立临时 profile；未连接用户原生 Chrome profile，未更改浏览器权限。
+- 服务：`http://127.0.0.1:4326`，独立合成 SQLite／EPUB 数据目录。没有操作 root 的 4317 服务。
 - 前端：复制 2026-09-11 最终候选 `dist/client` 到临时 candidate，再以只读副本提供页面；测试没有并发修改共享 dist。该构建包含 Markdown 呈现、元数据、失败提示和重试状态。
 - 样本：1 个根讨论、24 个分支各含 19 个子讨论，以及独立的 19 层深分支，共 **500 个讨论**；根到最深节点共 **20 级**。全部由公开 Store／BookLibrary／LearningService 创建。
 - 消息与运行：程序保存明确标记为「合成记录、模型未运行」的消息和 Run；没有执行 500 次 CLI，也没有调用一次真实 Claude。编辑小结对话框由测试专用 adapter 返回合成内容。
 - EPUB：两个章节、重复合成句；没有读取、上传或提交用户书籍原文。
-- 时间：规模检查 `18:35:10–18:35:18`（Asia/Shanghai）；来源状态随后完成。三尺寸各项为独立功能断言，不是图片相似度测试。
+- 时间：规模检查及来源状态于 `17:41:45–17:41:57`（Asia/Shanghai）完成。三尺寸各项为独立功能断言，不是图片相似度测试。
 
 原始结果及前端资源 SHA-256：
 
-- [规模结果 JSON](../../tests/browser/artifacts/2026-09-11-permission-final/results.json)
-- [来源状态结果 JSON](../../tests/browser/artifacts/2026-09-11-permission-final/source-results.json)
-- [构建与环境清单](../../tests/browser/artifacts/2026-09-11-permission-final/artifact-manifest.json)
-- [合成数据清单](../../tests/browser/artifacts/2026-09-11-permission-final/seed-manifest.json)
+- [规模结果 JSON](../../tests/browser/artifacts/2026-09-11-final/results.json)
+- [来源状态结果 JSON](../../tests/browser/artifacts/2026-09-11-final/source-results.json)
+- [构建与环境清单](../../tests/browser/artifacts/2026-09-11-final/artifact-manifest.json)
+- [合成数据清单](../../tests/browser/artifacts/2026-09-11-final/seed-manifest.json)
 
 ## 三尺寸结果
 
@@ -34,7 +34,7 @@
 
 线路图画布为 **1275×48550 CSS px**，三个尺寸的节点点击区域均为 **42×42 px**；没有把 500 节点整体缩小塞进视口。线路图在窄栏中水平／垂直滚动。三个页面均无全页横向或纵向溢出，未产生 pageerror 或 HTTP(S) 外部请求。
 
-每个尺寸的兄弟往返检查包含输入、等待持久化、切换两次及返回深层节点，整组耗时分别为 **773、1056、810 ms**。它们是本机一次合成样本的观测值，不是正式性能 SLA 或负载测试结论。
+每个尺寸的兄弟往返检查包含输入、等待持久化、切换两次及返回深层节点，整组耗时分别为 **767、900、868 ms**。它们是本机一次合成样本的观测值，不是正式性能 SLA 或负载测试结论。
 
 超长讨论标题使用自身滚动区域，完整名称也可在祖先对话框读取。390 px 窗口下 AI 面板宽 308 px、线路栏宽 82 px，功能可达但空间紧；本次不据此承诺手机长时间阅读体验。
 
@@ -42,9 +42,9 @@
 
 | 尺寸 | 主界面 | 完整路径 | 折叠后 | 小结编辑 |
 |---|---|---|---|---|
-| 1487×1058 | [讨论](../../tests/browser/artifacts/2026-09-11-permission-final/1487x1058-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-permission-final/1487x1058-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-permission-final/1487x1058-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-permission-final/1487x1058-summary-dialog.png) |
-| 1280×720 | [讨论](../../tests/browser/artifacts/2026-09-11-permission-final/1280x720-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-permission-final/1280x720-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-permission-final/1280x720-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-permission-final/1280x720-summary-dialog.png) |
-| 390×844 | [讨论](../../tests/browser/artifacts/2026-09-11-permission-final/390x844-discussion.png)、[正文](../../tests/browser/artifacts/2026-09-11-permission-final/390x844-reading.png) | [路径](../../tests/browser/artifacts/2026-09-11-permission-final/390x844-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-permission-final/390x844-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-permission-final/390x844-summary-dialog.png) |
+| 1487×1058 | [讨论](../../tests/browser/artifacts/2026-09-11-final/1487x1058-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-final/1487x1058-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-final/1487x1058-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-final/1487x1058-summary-dialog.png) |
+| 1280×720 | [讨论](../../tests/browser/artifacts/2026-09-11-final/1280x720-discussion.png) | [路径](../../tests/browser/artifacts/2026-09-11-final/1280x720-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-final/1280x720-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-final/1280x720-summary-dialog.png) |
+| 390×844 | [讨论](../../tests/browser/artifacts/2026-09-11-final/390x844-discussion.png)、[正文](../../tests/browser/artifacts/2026-09-11-final/390x844-reading.png) | [路径](../../tests/browser/artifacts/2026-09-11-final/390x844-path-dialog.png) | [折叠](../../tests/browser/artifacts/2026-09-11-final/390x844-folded.png) | [编辑](../../tests/browser/artifacts/2026-09-11-final/390x844-summary-dialog.png) |
 
 ## 合成来源候选检查
 
@@ -55,11 +55,11 @@
 3. 再次明确点击「我已对照确认」，才变为 `verification=confirmed`。B 仍未选择、未确认。
 4. 浏览器实际发出的两次独立 PATCH 分别为 `{selected:true}` 与 `{verification:'confirmed',selected:true}`。确认动作可同时保留选择状态；它不是第一次选择动作的隐含效果。
 
-截图：[未选择](../../tests/browser/artifacts/2026-09-11-permission-final/sources-unselected.png)、[已选但待核对](../../tests/browser/artifacts/2026-09-11-permission-final/sources-selected-still-unverified.png)、[明确确认后](../../tests/browser/artifacts/2026-09-11-permission-final/sources-explicitly-confirmed.png)。
+截图：[未选择](../../tests/browser/artifacts/2026-09-11-final/sources-unselected.png)、[已选但待核对](../../tests/browser/artifacts/2026-09-11-final/sources-selected-still-unverified.png)、[明确确认后](../../tests/browser/artifacts/2026-09-11-final/sources-explicitly-confirmed.png)。
 
 没有点击外部来源链接或触发重新检索；`example.invalid` 仅用于合成候选的可识别占位地址。
 
-另在同一独立合成服务检查默认报告日期：省略 date、指定 `Pacific/Kiritimati` 时，该时区日期为 **2026-09-11**；GET report 返回相同日期。此项为额外 API 回归，不计入前述 21 项浏览器检查。[结果](../../tests/browser/artifacts/2026-09-11-permission-final/default-report-date.json)
+另在同一独立合成服务检查默认报告日期：省略 date、指定 `Pacific/Kiritimati` 时，该时区日期为 **2026-09-11**；GET report 返回相同日期。此项为额外 API 回归，不计入前述 21 项浏览器检查。[结果](../../tests/browser/artifacts/2026-09-11-final/default-report-date.json)
 
 ## 复现入口
 

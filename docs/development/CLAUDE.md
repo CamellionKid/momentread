@@ -12,6 +12,7 @@
 - 新讨论显式生成 UUID；接续仅使用指定的 `--resume UUID`，不使用 `--continue`、最近会话推断、任意历史分叉或全局会话扫描。
 - `--safe-mode`、空 setting sources、空 MCP 配置与 `--strict-mcp-config` 隔离用户 hooks、plugins、skills、MCP。`system/init` 再次核对实际工具、插件和 MCP，越界即中止。
 - `discussion/summary/daily` 不开放外部工具；`matching` 仅开放 WebSearch/WebFetch。结构化输出允许 CLI 自带的 `StructuredOutput`，它不授予文件或网络能力。
+- `discussion/summary/daily` 的系统提示要求自然、通顺的简体中文；仅在辨析外文引句、专名或术语时保留必要外语，并紧接中文释义。学习上下文内保留相同约束，但不把用户数据字段当作系统指令。
 - 权限使用 `manual`、host、stdio。每个 matching 运行只向界面询问一次；允许或拒绝只覆盖该运行的 WebSearch／WebFetch，不写永久权限，也不启用 bypass。适配器限制每轮最多 3 次 WebSearch 和 5 次 WebFetch，超额请求自动拒绝。
 - 只从既有 Claude `settings.json` 的 `env` 提取认证、endpoint 和模型映射白名单；进程环境优先。不会继承该文件的权限规则、插件或 hooks，不输出凭据值。
 - 默认单次运行最长 300 秒。取消先 SIGINT，5 秒未退出再 SIGKILL；正常结果也要等待进程清洁退出才可接续。取消和强停的会话均标为不可接续，由学习服务下次以显式背景新建。
@@ -59,12 +60,15 @@ npm exec tsx -- scripts/claude-probe.ts --live resume
 npm exec tsx -- scripts/claude-probe.ts --live isolation
 npm exec tsx -- scripts/claude-probe.ts --live cancel
 npm exec tsx -- scripts/claude-probe.ts --live summary
+npm exec tsx -- scripts/claude-probe.ts --live language
 npm exec tsx -- scripts/claude-probe.ts --live search
 npm exec tsx -- scripts/claude-probe.ts --live fetch
 npm exec tsx -- scripts/claude-probe.ts --live deny
 ```
 
 脚本每次创建隔离临时 cwd；只打印脱敏状态与合成输出。matching 用例要求实际工具未报错，search 还必须观察到 WebSearch 明确返回至少一个结果链接，否则退出码为 1；拒绝用例单独验证拒绝路径。取消用例在首个输出或初始化后 4 秒触发，最长 120 秒运行期限。
+
+`language` 连续创建三个独立 discussion 会话，分别检查普通段落、Markdown 标题／列表和加粗／示例。输入均为合成中文问题并明确禁止外语；任一最终回答少于 20 字或包含拉丁字母，探针退出码为 1。该断言用于发现明显的中外文粘连，不等于对内容正确性作自动评分。
 
 | 实测 | UTC 时间／运行 ID | 结果 |
 |---|---|---|
@@ -105,6 +109,8 @@ npm exec tsx -- scripts/claude-probe.ts --live deny
 | 明确 resume | 13:40:05–08，`4a7fe902-b1ee-416c-b518-7685ea471643` → `98b1c761-476f-4bb4-a197-b17659c954a1` | **通过**；相同 session `87234f80-2814-480e-84b6-9f87665733a1`，准确取回合成 marker |
 | WebSearch | 13:40:05–12，`bfbc3dd5-2c10-4e29-ba6e-9514154a2838` | **未通过搜索结果验收**；允许本次权限后工具未报错，但真实返回仅含查询标题、空白正文及 REMINDER，零来源链接 |
 | WebFetch | 13:42:35–43，`a1d16d7a-3e30-45dc-aae8-7d3e70186d45` | **固定 URL 工具调用通过**；实际 WebFetch result success=true，模型报告 Gutenberg 页标题。独立正文取回／引句核对仍由匹配模块另行验收 |
+
+2026-09-11 09:09:04–25 UTC，加入系统级中文约束后，`language` 的三个独立真实运行 `eba7dc36-c6a8-40d9-ba6b-fe5f6f02a6f1`、`04d213f5-b0ee-4783-b433-da8b4a613b4d`、`8531edd1-2544-4f34-a240-b51cec7dfb2f` 均通过；三份最终回答均超过 20 字且不含拉丁字母，Markdown 标题、列表与加粗内容完整。随后新的无历史界面测试者在真实 EPUB 上检查根讨论和两个兄弟分支，3/3 回答为自然简体中文；一个保留的外文术语具有紧邻中文释义。
 
 CLI initialized.model 均为 `claude-opus-4-8[1m]`；此次 first 和 search 明确任务会话中的 assistant provider 返回 model 字段为 `glm-5.3-flash`。两者分别是 CLI 请求标识与 provider 自报标识，不据此保证实际底层模型身份。
 
