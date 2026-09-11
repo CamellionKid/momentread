@@ -26,14 +26,36 @@ describe('runtime provider and model selection',()=>{
     const rejected=await h.request('/api/runtime','PATCH',{model:'not-a-model'});expect(rejected.status).toBe(400);
     const saved=await h.request('/api/runtime','PATCH',{model:'zijie/doubao-x'});expect(saved.status).toBe(200);
     expect((await saved.json()).model).toBe('zijie/doubao-x');
+    const changed=await h.request('/api/runtime','PATCH',{model:'opencode-go/deepseek-v4-flash'});expect(changed.status).toBe(200);
+    expect((await changed.json()).model).toBe('opencode-go/deepseek-v4-flash');
     const book=await importSynthetic(h);
     const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
     expect(analysis.status).toBe(202);
-    expect(adapter.starts.at(-1)?.model).toBe('zijie/doubao-x');
+    expect(adapter.starts.at(-1)?.model).toBe('opencode-go/deepseek-v4-flash');
     await waitFor(()=>h.state(book.id),state=>state.runs.length===2&&state.runs.every(run=>['completed','failed'].includes(run.status)),'analysis chain complete');
     const reopened=await (async()=>{await h.dispose(false);opened.splice(opened.indexOf(h),1);const value=await makeHarness(new ModelAdapter(),h.dir);opened.push(value);return value;})();
     const body=await (await reopened.request('/api/runtime')).json();
-    expect(body.model).toBe('zijie/doubao-x');
+    expect(body.model).toBe('opencode-go/deepseek-v4-flash');
+  });
+
+  it('keeps model selections isolated per provider',async()=>{
+    const h=await makeHarness(new ModelAdapter());opened.push(h);
+    await h.request('/api/runtime','PATCH',{model:'zijie/doubao-x'});
+    const dir=h.dir;await h.dispose(false);opened.splice(opened.indexOf(h),1);
+    const asOpencode=await makeHarness(new ModelAdapter(),dir,'opencode');opened.push(asOpencode);
+    expect((await (await asOpencode.request('/api/runtime')).json()).model).toBeNull();
+    await asOpencode.request('/api/runtime','PATCH',{model:'opencode-go/deepseek-v4-flash'});
+    await asOpencode.dispose(false);opened.splice(opened.indexOf(asOpencode),1);
+    const backToClaude=await makeHarness(new ModelAdapter(),dir);opened.push(backToClaude);
+    expect((await (await backToClaude.request('/api/runtime')).json()).model).toBe('zijie/doubao-x');
+  });
+
+  it('migrates a legacy shared model preference into the opencode scope',async()=>{
+    const h=await harness();const dir=h.dir;
+    h.store.setPreference('ai.model','opencode-go/deepseek-v4-flash');
+    await h.dispose(false);opened.splice(opened.indexOf(h),1);
+    const migrated=await makeHarness(new ModelAdapter(),dir,'opencode');opened.push(migrated);
+    expect((await (await migrated.request('/api/runtime')).json()).model).toBe('opencode-go/deepseek-v4-flash');
   });
 
   it('rejects model selection when the runtime has no models capability',async()=>{

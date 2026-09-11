@@ -110,6 +110,9 @@ export function createStore(dataDir: string): Store {
       if (previous && previous.value !== serialized) throw new AppError('IDEMPOTENCY_CONFLICT', '此请求标识已经用于其他结果。', 409);
       db.prepare('INSERT OR IGNORE INTO idempotency(key,value) VALUES(?,?)').run(key, serialized);
     },
+    setPreference(key, value) {
+      db.prepare('INSERT INTO idempotency(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, serialize(value));
+    },
     close() { if (db.open) db.close(); },
   };
   databases.set(store, db);

@@ -11,7 +11,7 @@ import {buildReport,renderReport,dayAt} from './exports/index';
 
 type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number;ai?:{provider:'claude'|'opencode';model?:string}};
 export function createApp(services:Services){
- const {store,library,adapter,learning,matching}=services;const runs=new RunManager(store,adapter);const app=new Hono();
+ const {store,library,adapter,learning,matching}=services;const runs=new RunManager(store,adapter,services.ai?.provider);const app=new Hono();
  const matchingUnsupported=()=>new AppError('MATCHING_UNSUPPORTED','当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。',400);
  const supportsMatching=()=>services.ai?.provider!=='opencode';
  // Download capabilities belong to this service instance, never to restored data.
@@ -32,7 +32,11 @@ export function createApp(services:Services){
   const context=matching.buildInput(id);
   return runs.start(context,'matching',{onComplete:async(event)=>{const result=event.data.structuredOutput??event.data.text;await matching.complete(id,{result,toolResults:event.data.toolResults??[]})},onTerminal:async(run)=>{if(continueAnswer&&run.status!=='cancelled'){try{await answer(id)}catch(error){const d=discussion(id);store.put('runs',{id:randomUUID(),bookId:d.bookId,discussionId:d.id,purpose:'discussion',status:'failed',contextSnapshotId:context.id,sessionId:null,sessionReusable:false,partialText:'',result:null,error:'解析未能启动，请重新发送问题。',createdAt:now(),updatedAt:now()})}}}},{type:'object',properties:{candidates:{type:'array',items:{type:'object',properties:{url:{type:'string'},title:{type:'string'},language:{type:'string'},version:{type:'string'},quote:{type:'string'},locator:{type:'string'},reason:{type:'string'}},required:['url','title','language','version','quote','locator','reason'],additionalProperties:false}}},required:['candidates'],additionalProperties:false});
  }
- const runtimeInfo=async()=>({...(await adapter.probe()),provider:services.ai?.provider??'claude',models:await adapter.models?.()??[],model:(store.getIdempotent('ai.model') as string|undefined)??services.ai?.model??null});
+ const provider=services.ai?.provider??'claude';
+ const modelKey=`ai.model.${provider}`;
+ const legacyModel=store.getIdempotent('ai.model');
+ if(typeof legacyModel==='string'&&legacyModel.includes('/')&&provider==='opencode'&&!store.getIdempotent(modelKey))store.setPreference(modelKey,legacyModel);
+ const runtimeInfo=async()=>({...(await adapter.probe()),provider,models:await adapter.models?.()??[],model:(store.getIdempotent(modelKey) as string|undefined)??services.ai?.model??null});
  const RuntimePatchSchema=z.object({model:z.string().min(1).max(100)});
  app.get('/api/health',c=>c.json({status:'ok',version:'0.1.0'}));
  app.get('/api/runtime',async c=>c.json(await runtimeInfo()));
@@ -41,7 +45,7 @@ export function createApp(services:Services){
   if(!adapter.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
   const models=await adapter.models();
   if(!models.includes(model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
-  store.setIdempotent('ai.model',model);
+  store.setPreference(modelKey,model);
   return c.json(await runtimeInfo());
  });
  app.get('/api/books',c=>c.json(store.list('books')));app.post('/api/books',async c=>{const f=await fileInput(c);return c.json(await library.importBook(f.bytes,f.filename),201)});

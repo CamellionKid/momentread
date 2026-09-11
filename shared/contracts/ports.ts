@@ -9,6 +9,7 @@ export interface Store {
  events(runId:string,after?:number):RunEvent[];
  getIdempotent(key:string):unknown|undefined;
  setIdempotent(key:string,value:unknown):void;
+ setPreference(key:string,value:unknown):void;
  close():void;
 }
 export interface BookLibrary {
