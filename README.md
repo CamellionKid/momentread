@@ -2,11 +2,9 @@
 
 在浏览器里阅读 EPUB，遇到不懂的段落时请求 AI 解析；把概念展开成独立分支，再整理并返回原来的阅读思路。
 
-![阅读界面](docs/assets/screenshot-reading.png)
+![书架](docs/assets/screenshot-library.png)
 
-![讨论分支](docs/assets/screenshot-discussion.png)
-
-![今日小结整理](docs/assets/screenshot-summary.png)
+![阅读与解析](docs/assets/screenshot-reading.png)
 
 **当前状态：阅读与学习主链已完成实际验收；自动原著发现和最终提交盲测尚未放行。** 生产入口位于仓库根目录。额度恢复后真实首次调用、明确接续、小结和今日总结均通过。原著自动检索仍有明确阻塞：本机 Claude provider 的 WebSearch 返回零条结果，不能宣称自动匹配已可用。候选独立取回与文字核对已有另外的实测，二者不能混为一谈。当前验证状态见 [开发清单](docs/development/STATUS.md)、[首版验收](docs/development/ACCEPTANCE.md)、[独立系统测试](docs/development/SYSTEM-TESTS.md) 和 [Claude 实测](docs/development/CLAUDE.md)。
 
