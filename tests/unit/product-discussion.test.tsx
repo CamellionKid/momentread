@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
-import React from "react";
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { BookState, RunEvent } from "../../shared/contracts";
-import { DiscussionPane } from "../../src/product/DiscussionPane";
+import {
+  DiscussionPane,
+  type BranchSelection,
+} from "../../src/product/DiscussionPane";
 import { readRunRetry, RunRetryNotice } from "../../src/product/RunRetryNotice";
+
+(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 const time = "2026-09-10T00:00:00.000Z";
 const state = (): BookState => ({
@@ -204,5 +210,84 @@ describe("discussion actionable failure and retry feedback", () => {
     expect(html).not.toContain("secret-provider-detail");
     expect(html).not.toContain("API KEY");
     expect(html).not.toContain("Infinity");
+  });
+});
+
+describe("floating concept-branch bar", () => {
+  it("floats the branch action after selecting answer text, without scrolling to the message footer", async () => {
+    const bookState = state();
+    bookState.runs = [];
+    bookState.messages = [
+      {
+        id: "answer-a",
+        bookId: "book-a",
+        discussionId: "root-a",
+        role: "assistant",
+        text: "本原（arche）是万物由以产生又复归于它的东西。",
+        status: "complete",
+        runId: null,
+        createdAt: time,
+      },
+    ];
+    let captured: BranchSelection | null = null;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <DiscussionPane
+          state={bookState}
+          node={bookState.discussions[0]}
+          saveStatus="saved"
+          onDraft={noop}
+          onScroll={noop}
+          onSend={noop}
+          onSummary={noop}
+          onSelect={noop}
+          onBranch={(value) => {
+            captured = value;
+          }}
+          onSources={noop}
+          onHistory={noop}
+          onConcepts={noop}
+          onLocate={noop}
+          onCancel={noop}
+          onAncestors={noop}
+          onCollapse={noop}
+          onExpand={noop}
+          onPreview={noop}
+          onRetrySave={noop}
+        />,
+      );
+    });
+    expect(host.querySelector(".discussion-selection-bar")).toBeNull();
+    const textEl = host.querySelector<HTMLElement>(".product-message-text")!;
+    const walker = document.createTreeWalker(textEl, 4);
+    const textNode = walker.nextNode() as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 4);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    await act(async () => {
+      textEl.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+    const bar = host.querySelector(".discussion-selection-bar");
+    expect(bar?.textContent).toContain("已选 4 字");
+    expect(bar?.textContent).toContain("展开已选中的概念");
+    expect(host.querySelector(".answer-actions button")).toBeNull();
+    await act(async () => {
+      bar!
+        .querySelector("button.primary")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(captured).toMatchObject({
+      parentId: "root-a",
+      origin: { messageId: "answer-a", start: 0, end: 4 },
+    });
+    expect(host.querySelector(".discussion-selection-bar")).toBeNull();
+    await act(async () => root.unmount());
+    host.remove();
   });
 });
