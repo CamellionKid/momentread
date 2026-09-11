@@ -1123,6 +1123,15 @@ input[type="range"] {
   color: #999;
   margin: 6px 0 0;
 }
+.runtime-model-select {
+  max-width: 220px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ddd;
+  background: #232323;
+  border: 1px solid #333;
+  border-radius: 6px;
+}
 .full-range {
   width: 100%;
 }

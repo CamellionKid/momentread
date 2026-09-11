@@ -1,5 +1,6 @@
 import type {Book,BookState,Workspace,Discussion,AnalysisRequest,BranchRequest,SummaryVersion,SourceCandidate,Run,DailyReport,FileVersion} from '../shared/contracts/index';
 import type {RuntimeProbe} from '../shared/contracts/ports';
+export type RuntimeInfo=RuntimeProbe&{provider:'claude'|'opencode';models:string[];model:string|null};
 export class ApiError extends Error {constructor(public code:string,message:string,public retryable:boolean,public status:number){super(message)}}
 async function request<T>(path:string,options:RequestInit={}):Promise<T>{
  const response=await fetch('/api'+path,{...options,headers:{...(options.body instanceof FormData?{}:{'Content-Type':'application/json'}),...options.headers}});
@@ -10,7 +11,7 @@ const post=<T>(path:string,body?:unknown)=>request<T>(path,{method:'POST',body:b
 const patch=<T>(path:string,body:unknown)=>request<T>(path,{method:'PATCH',body:JSON.stringify(body)});
 function upload<T>(path:string,file:File){const body=new FormData();body.append('file',file);return request<T>(path,{method:'POST',body})}
 export const api={
- books:()=>request<Book[]>('/books'),runtime:()=>request<RuntimeProbe>('/runtime'),state:(id:string)=>request<BookState>(`/books/${id}/state`),
+ books:()=>request<Book[]>('/books'),runtime:()=>request<RuntimeInfo>('/runtime'),setModel:(model:string)=>patch<RuntimeInfo>('/runtime',{model}),state:(id:string)=>request<BookState>(`/books/${id}/state`),
  importBook:(file:File)=>upload<Book>('/books',file),importOriginal:(id:string,file:File)=>upload<FileVersion>(`/books/${id}/originals`,file),
  bookMetadata:(id:string,body:Partial<Pick<Book,'title'|'author'|'language'|'translator'|'edition'|'identifier'>>)=>patch<Book>(`/books/${id}`,body),
  workspace:(id:string,body:Partial<Pick<Workspace,'position'|'activeDiscussionId'|'collapsed'|'fontSize'|'flow'>>)=>patch<Workspace>(`/books/${id}/workspace`,body),

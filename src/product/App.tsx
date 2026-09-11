@@ -16,7 +16,8 @@ import type {
   SummaryVersion,
   TextReference,
 } from "../../shared/contracts";
-import type { ReaderHandle, RuntimeProbe } from "../../shared/contracts/ports";
+import type { ReaderHandle } from "../../shared/contracts/ports";
+import type { RuntimeInfo } from "../api";
 import { EpubReader } from "../reader/EpubReader";
 import { useWorkspace } from "./useWorkspace";
 import { Dialog } from "./Dialog";
@@ -63,7 +64,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [probe, setProbe] = useState<RuntimeProbe | null>(null);
+  const [probe, setProbe] = useState<RuntimeInfo | null>(null);
   const [smallPanel, setSmallPanel] = useState<"reading" | "discussion">(
     "reading",
   );
@@ -629,6 +630,9 @@ export default function App() {
             void runAction(async () => setProbe(await api.runtime()))
           }
           onBackup={() => void runAction(backup)}
+          onModel={(model) =>
+            void runAction(async () => setProbe(await api.setModel(model)))
+          }
         />
       )}
       {modal === "book-details" && state && (

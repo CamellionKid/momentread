@@ -13,7 +13,7 @@ import type {
   SourceCandidate,
   SummaryVersion,
 } from "../../shared/contracts";
-import type { RuntimeProbe } from "../../shared/contracts/ports";
+import type { RuntimeInfo } from "../api";
 import { Dialog } from "./Dialog";
 import { isActiveRun, localDate } from "./model";
 import { Markdown } from "./Markdown";
@@ -397,21 +397,47 @@ export function RuntimePanel({
   onClose,
   onProbe,
   onBackup,
+  onModel,
 }: {
-  probe: RuntimeProbe | null;
+  probe: RuntimeInfo | null;
   onClose: () => void;
   onProbe: () => void;
   onBackup: () => void;
+  onModel: (model: string) => void;
 }) {
+  const providerName = probe?.provider === "opencode" ? "opencode" : "Claude Code";
   return (
     <Dialog title="AI 连接与本地数据" onClose={onClose}>
       <div className="setting-row">
         <div>
-          <strong>Claude Code CLI</strong>
+          <strong>{providerName}</strong>
           <p>{probe?.version || "尚未检测版本"}</p>
         </div>
         <span>{probe?.installed ? "已安装" : "未检测到"}</span>
       </div>
+      {probe && probe.models.length > 0 && (
+        <div className="setting-row">
+          <div>
+            <strong>模型</strong>
+            <p>{probe.model ? "当前使用所选模型" : "使用运行时默认模型"}</p>
+          </div>
+          <select
+            className="runtime-model-select"
+            aria-label="选择模型"
+            value={probe.model ?? ""}
+            onChange={(event) => {
+              if (event.target.value) onModel(event.target.value);
+            }}
+          >
+            {!probe.model && <option value="">默认模型</option>}
+            {probe.models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <p className="muted">{probe?.message || "正在检测连接…"}</p>
       <p className="quiet-note">
         安装和登录状态不等于调用成功。真实解析完成后才表示这次调用可用。
