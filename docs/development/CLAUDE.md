@@ -112,6 +112,8 @@ npm exec tsx -- scripts/claude-probe.ts --live deny
 
 2026-09-11 09:09:04–25 UTC，加入系统级中文约束后，`language` 的三个独立真实运行 `eba7dc36-c6a8-40d9-ba6b-fe5f6f02a6f1`、`04d213f5-b0ee-4783-b433-da8b4a613b4d`、`8531edd1-2544-4f34-a240-b51cec7dfb2f` 均通过；三份最终回答均超过 20 字且不含拉丁字母，Markdown 标题、列表与加粗内容完整。随后新的无历史界面测试者在真实 EPUB 上检查根讨论和两个兄弟分支，3/3 回答为自然简体中文；一个保留的外文术语具有紧邻中文释义。
 
+2026-09-11 09:54:13–15 UTC，启动／运行两阶段期限修复后的最终真实 first 运行 `346a023f-bbcf-49e6-95d8-d2e3a6b7d76f` 通过：initialized 后返回精确中文短句，进程清洁退出且 sessionReusable=true。对应竞态断言连续执行 10 次通过，静默进程超时和瞬时错误后成功用例另行通过。
+
 CLI initialized.model 均为 `claude-opus-4-8[1m]`；此次 first 和 search 明确任务会话中的 assistant provider 返回 model 字段为 `glm-5.3-flash`。两者分别是 CLI 请求标识与 provider 自报标识，不据此保证实际底层模型身份。
 
 WebSearch 这次没有复现早先 403，不能继续把当前失败归因为 403，也不能仅凭一次空查询认定 provider 永久不支持搜索。观察事实是：同一配置的普通推理和固定 URL 取回恢复，公开搜索没有给出本次查询的有效结果。没有为寻找成功截图而重复搜索或切换供应商。
