@@ -9,9 +9,11 @@ import type {Store,BookLibrary,ClaudeAdapter,LearningService,MatchingService} fr
 import {RunManager} from './runs';
 import {buildReport,renderReport,dayAt} from './exports/index';
 
-type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number};
+type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number;ai?:{provider:'claude'|'opencode';model?:string}};
 export function createApp(services:Services){
  const {store,library,adapter,learning,matching}=services;const runs=new RunManager(store,adapter);const app=new Hono();
+ const matchingUnsupported=()=>new AppError('MATCHING_UNSUPPORTED','当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。',400);
+ const supportsMatching=()=>services.ai?.provider!=='opencode';
  // Download capabilities belong to this service instance, never to restored data.
  const backupDownloads=new Map<string,string>();
  const required=<T>(value:T|undefined,message='找不到记录。'):T=>{if(value===undefined)throw new AppError('NOT_FOUND',message,404);return value};
@@ -30,21 +32,32 @@ export function createApp(services:Services){
   const context=matching.buildInput(id);
   return runs.start(context,'matching',{onComplete:async(event)=>{const result=event.data.structuredOutput??event.data.text;await matching.complete(id,{result,toolResults:event.data.toolResults??[]})},onTerminal:async(run)=>{if(continueAnswer&&run.status!=='cancelled'){try{await answer(id)}catch(error){const d=discussion(id);store.put('runs',{id:randomUUID(),bookId:d.bookId,discussionId:d.id,purpose:'discussion',status:'failed',contextSnapshotId:context.id,sessionId:null,sessionReusable:false,partialText:'',result:null,error:'解析未能启动，请重新发送问题。',createdAt:now(),updatedAt:now()})}}}},{type:'object',properties:{candidates:{type:'array',items:{type:'object',properties:{url:{type:'string'},title:{type:'string'},language:{type:'string'},version:{type:'string'},quote:{type:'string'},locator:{type:'string'},reason:{type:'string'}},required:['url','title','language','version','quote','locator','reason'],additionalProperties:false}}},required:['candidates'],additionalProperties:false});
  }
- app.get('/api/health',c=>c.json({status:'ok',version:'0.1.0'}));app.get('/api/runtime',async c=>c.json(await adapter.probe()));
+ const runtimeInfo=async()=>({...(await adapter.probe()),provider:services.ai?.provider??'claude',models:await adapter.models?.()??[],model:(store.getIdempotent('ai.model') as string|undefined)??services.ai?.model??null});
+ const RuntimePatchSchema=z.object({model:z.string().min(1).max(100)});
+ app.get('/api/health',c=>c.json({status:'ok',version:'0.1.0'}));
+ app.get('/api/runtime',async c=>c.json(await runtimeInfo()));
+ app.patch('/api/runtime',async c=>{
+  const {model}=RuntimePatchSchema.parse(await c.req.json());
+  if(!adapter.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
+  const models=await adapter.models();
+  if(!models.includes(model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
+  store.setIdempotent('ai.model',model);
+  return c.json(await runtimeInfo());
+ });
  app.get('/api/books',c=>c.json(store.list('books')));app.post('/api/books',async c=>{const f=await fileInput(c);return c.json(await library.importBook(f.bytes,f.filename),201)});
  app.patch('/api/books/:id',async c=>{const previous=book(c.req.param('id'));const patch=BookMetadataPatchSchema.parse(await c.req.json());const updated={...previous,...patch};store.put('books',updated);return c.json(updated)});
  app.get('/api/books/:id/state',c=>c.json(getState(c.req.param('id'))));
  app.patch('/api/books/:id/workspace',async c=>{const b=book(c.req.param('id'));const patch=WorkspacePatchSchema.parse(await c.req.json());if(patch.position&&patch.position.fileVersionId!==b.fileVersionId)throw new AppError('FILE_VERSION_CONFLICT','阅读位置属于其他文件版本。',409);if(patch.activeDiscussionId&&discussion(patch.activeDiscussionId).bookId!==b.id)throw new AppError('BOOK_MISMATCH','讨论不属于这本书。',409);if(patch.collapsed?.some(id=>discussion(id).bookId!==b.id))throw new AppError('BOOK_MISMATCH','折叠记录不属于这本书。',409);const w={...workspace(b.id),...patch,updatedAt:now()};store.transaction(()=>{store.put('workspaces',w);if(patch.position)store.put('activities',{id:randomUUID(),bookId:b.id,...patch.position,createdAt:now()})});return c.json(w)});
  app.get('/api/files/:id',async c=>{const file=required(store.get('files',Id.parse(c.req.param('id'))));const bytes=await readFile(library.filePath(file.id));c.header('Content-Type',file.mediaType);c.header('Content-Security-Policy',"default-src 'none'; sandbox");return c.body(bytes)});
  app.post('/api/books/:id/originals',async c=>{const b=book(c.req.param('id'));const f=await fileInput(c);const file=await library.importOriginal(b.id,f.bytes,f.filename);matching.originalAdded(b.id,file.id);return c.json(file,201)});
- app.post('/api/analyses',async c=>{const request=AnalysisRequestSchema.parse(await c.req.json());const d=learning.createRoot(request);const w=workspace(d.bookId);store.put('workspaces',{...w,activeDiscussionId:d.id,updatedAt:now()});const run=await match(d.id,true);return c.json({discussionId:d.id,runId:run.id},202)});
+ app.post('/api/analyses',async c=>{const request=AnalysisRequestSchema.parse(await c.req.json());const d=learning.createRoot(request);const w=workspace(d.bookId);store.put('workspaces',{...w,activeDiscussionId:d.id,updatedAt:now()});const run=supportsMatching()?await match(d.id,true):await answer(d.id);return c.json({discussionId:d.id,runId:run.id},202)});
  app.post('/api/branches',async c=>{const d=learning.createBranch(BranchRequestSchema.parse(await c.req.json()));const w=workspace(d.bookId);store.put('workspaces',{...w,activeDiscussionId:d.id,updatedAt:now()});const run=await answer(d.id);return c.json({discussionId:d.id,runId:run.id},202)});
  app.patch('/api/discussions/:id',async c=>c.json(learning.updateDiscussion(c.req.param('id'),DiscussionPatchSchema.parse(await c.req.json()))));
  app.post('/api/discussions/:id/messages',async c=>{const id=discussion(c.req.param('id')).id;if(runs.busy(id))throw new AppError('RUN_BUSY','请等待当前运行结束。',409,true);const {text}=MessageRequestSchema.parse(await c.req.json());learning.appendUser(id,text);const run=await answer(id);return c.json({runId:run.id},202)});
  app.post('/api/discussions/:id/summary',async c=>{const id=discussion(c.req.param('id')).id;const context=learning.buildInput(id,'summary');const run=await runs.start(context,'summary',{onComplete:(e)=>{const parsed=SummaryOutputSchema.safeParse(e.data.structuredOutput);if(!parsed.success)throw new AppError('INVALID_SUMMARY','未生成有效的结构化小结，请重试。',502,true);learning.createSummaryDraft(context.id,parsed.data.content)}},{type:'object',properties:{content:{type:'string'}},required:['content'],additionalProperties:false});return c.json({runId:run.id},202)});
  app.post('/api/summaries/:id/confirm',async c=>c.json(learning.confirmSummary(c.req.param('id'),ConfirmRequestSchema.parse(await c.req.json()))));
  app.get('/api/discussions/:id/history',c=>{const d=discussion(c.req.param('id'));return c.json(store.list('summaries',d.bookId).filter(s=>s.discussionId===d.id&&s.confirmed).sort((a,b)=>b.version-a.version))});
- app.post('/api/discussions/:id/matching',async c=>{const run=await match(discussion(c.req.param('id')).id);return c.json({runId:run.id},202)});
+ app.post('/api/discussions/:id/matching',async c=>{if(!supportsMatching())throw matchingUnsupported();const run=await match(discussion(c.req.param('id')).id);return c.json({runId:run.id},202)});
  app.patch('/api/sources/:id',async c=>c.json(matching.updateSource(c.req.param('id'),SourcePatchSchema.parse(await c.req.json()))));
  app.get('/api/runs/:id',c=>c.json(required(store.get('runs',Id.parse(c.req.param('id'))))));
  app.get('/api/runs/:id/events',c=>{const id=Id.parse(c.req.param('id'));required(store.get('runs',id));const raw=c.req.header('last-event-id')??c.req.query('after')??'0';let seq=Number(raw);if(!Number.isSafeInteger(seq)||seq<0)throw new AppError('INVALID_CURSOR','运行事件位置无效。');return streamSSE(c,async stream=>{let aborted=false;stream.onAbort(()=>{aborted=true});while(!aborted){for(const event of store.events(id,seq)){await stream.writeSSE({id:String(event.seq),event:'run',data:JSON.stringify(event)});seq=event.seq}const run=store.get('runs',id)!;if(['completed','failed','cancelled','interrupted'].includes(run.status))break;await stream.sleep(250)}})});
