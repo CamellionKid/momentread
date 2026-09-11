@@ -35,6 +35,8 @@ export type BranchSelection = {
     displayText?: string;
   };
 };
+// 提问卡片色号：neutral 为选定默认；blue / warm 备选保留在样式表里，换主题改这一个常量即可。
+const questionTheme = "neutral";
 interface Props {
   state: BookState;
   node: Discussion | null;
@@ -302,31 +304,49 @@ export function DiscussionPane(props: Props) {
         {messages.map((message) => (
           <article
             className={`message ${message.role} product-message`}
+            data-question-theme={message.role === "user" ? questionTheme : undefined}
             key={message.id}
           >
-            <small>
-              {message.role === "user" ? "你" : "AI"}
-              {message.status !== "complete" &&
-                ` · ${message.status === "interrupted" ? "已中断" : message.status === "failed" ? "未完成" : "生成中"}`}
-            </small>
-            <div
-              className="product-message-text"
-              onMouseUp={(e) => selectMessage(message, e.currentTarget)}
-              onKeyUp={(e) => {
-                if (e.key === "Shift") selectMessage(message, e.currentTarget);
-              }}
-              tabIndex={message.role === "assistant" ? 0 : undefined}
-            >
-              {message.role === "assistant" ? (
-                <Markdown text={message.text} />
-              ) : (
-                message.text
-              )}
-            </div>
-            {message.role === "assistant" && message.status === "complete" && (
-              <div className="answer-actions">
-                <span className="quiet-note">先在回答中选中文字</span>
+            {message.role === "user" ? (
+              <div className="product-question-card">
+                <small>
+                  你
+                  {message.status !== "complete" &&
+                    ` · ${message.status === "interrupted" ? "已中断" : message.status === "failed" ? "未完成" : "生成中"}`}
+                </small>
+                <div
+                  className="product-message-text"
+                  onMouseUp={(e) => selectMessage(message, e.currentTarget)}
+                  onKeyUp={(e) => {
+                    if (e.key === "Shift") selectMessage(message, e.currentTarget);
+                  }}
+                >
+                  {message.text}
+                </div>
               </div>
+            ) : (
+              <>
+                <small>
+                  AI
+                  {message.status !== "complete" &&
+                    ` · ${message.status === "interrupted" ? "已中断" : message.status === "failed" ? "未完成" : "生成中"}`}
+                </small>
+                <div
+                  className="product-message-text"
+                  onMouseUp={(e) => selectMessage(message, e.currentTarget)}
+                  onKeyUp={(e) => {
+                    if (e.key === "Shift") selectMessage(message, e.currentTarget);
+                  }}
+                  tabIndex={0}
+                >
+                  <Markdown text={message.text} />
+                </div>
+                {message.status === "complete" && (
+                  <div className="answer-actions">
+                    <span className="quiet-note">先在回答中选中文字</span>
+                  </div>
+                )}
+              </>
             )}
           </article>
         ))}
