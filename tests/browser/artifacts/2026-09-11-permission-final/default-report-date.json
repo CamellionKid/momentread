@@ -1,9 +1,0 @@
-{
-  "synthetic": true,
-  "checkedAt": "2026-09-11T04:10:48.205Z",
-  "timezone": "Pacific/Kiritimati",
-  "expectedDate": "2026-09-11",
-  "actualDate": "2026-09-11",
-  "status": "passed",
-  "realModelInvocations": 0
-}

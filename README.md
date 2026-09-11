@@ -2,6 +2,12 @@
 
 在浏览器里阅读 EPUB，遇到不懂的段落时请求 AI 解析；把概念展开成独立分支，再整理并返回原来的阅读思路。
 
+![阅读界面](docs/assets/screenshot-reading.png)
+
+![讨论分支](docs/assets/screenshot-discussion.png)
+
+![今日小结整理](docs/assets/screenshot-summary.png)
+
 **当前状态：阅读与学习主链已完成实际验收；自动原著发现和最终提交盲测尚未放行。** 生产入口位于仓库根目录。额度恢复后真实首次调用、明确接续、小结和今日总结均通过。原著自动检索仍有明确阻塞：本机 Claude provider 的 WebSearch 返回零条结果，不能宣称自动匹配已可用。候选独立取回与文字核对已有另外的实测，二者不能混为一谈。当前验证状态见 [开发清单](docs/development/STATUS.md)、[首版验收](docs/development/ACCEPTANCE.md)、[独立系统测试](docs/development/SYSTEM-TESTS.md) 和 [Claude 实测](docs/development/CLAUDE.md)。
 
 ## 准备环境
@@ -30,7 +36,12 @@ MomentRead 不需要额外启动一个 Claude 聊天窗口或 Claude HTTP 服务
 
 ## 安装与启动
 
-在 **MomentRead 仓库根目录**执行。仓库尚未发布远程获取地址，因此这里不提供虚构的 `git clone` 命令。
+在 **MomentRead 仓库根目录**执行。获取源码：
+
+```sh
+git clone https://github.com/CamellionKid/momentread.git
+cd momentread
+```
 
 若使用 nvm，先让当前终端采用项目版本；已经使用正确 Node 版本时可跳过这两条：
 
@@ -213,4 +224,10 @@ MOMENTREAD_TEST_EPUB='/absolute/path/to/authorized-book.epub' npm test -- tests/
 - [开发状态](docs/development/STATUS.md)、[最终验收](docs/development/ACCEPTANCE.md)、[盲测记录](docs/development/BLIND-TEST.md)、[浏览器规模验收](docs/development/BROWSER-SCALE.md)
 - [ThoughtDAG 复用研究](docs/research/thoughtdag-reuse.md)、[foliate-js 来源与本地适配](vendor/foliate-js/README.momentread.md)
 
-本仓库使用 `main`；提交格式为 `[scope] short imperative description`。只暂存本次相关文件，凭据、书籍、学习数据、依赖和构建产物不进入 Git；当前没有公开发布或推送流程。
+本仓库使用 `main`；提交格式为 `[scope] short imperative description`。只暂存本次相关文件，凭据、书籍、学习数据、依赖和构建产物不进入 Git。
+
+## 许可
+
+本项目以 [MIT](LICENSE) 发布；其中的 [vendor/foliate-js](vendor/foliate-js) 子集来自 foliate-js 项目，其 MIT 许可与版权归属见 [vendor/foliate-js/LICENSE](vendor/foliate-js/LICENSE)。参与方式见 [CONTRIBUTING](CONTRIBUTING.md)。
+
+**诚实披露**：自动原著发现（候选检索）当前未放行——本机 Claude provider 的 WebSearch 返回零条有效来源链接，系统在该情况下诚实显示「尚未核对」，不会以未验证内容冒充原文；固定 URL 取回与用户补充原著文件可用。另外，验收期间的 CLI 实际响应模型为 `glm-5.3-flash`（provider 代理返回），与请求别名不同，细节见 [Claude 实测](docs/development/CLAUDE.md)。

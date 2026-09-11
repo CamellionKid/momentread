@@ -44,3 +44,6 @@ __pycache__/
 /test-results/
 /playwright-report/
 /.vitest/
+
+# Local browser-test artifacts (contain machine-local paths)
+/tests/browser/artifacts/
