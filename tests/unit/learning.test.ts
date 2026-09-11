@@ -158,6 +158,7 @@ describe('persisted source disclosure and optional concept review', () => {
     const noSource = JSON.parse(f.service.buildInput(root.id, 'discussion').input);
     expect(noSource.instructions).toContain('回答必须明确写“尚未核对外文原著”');
     expect(noSource.instructions).toContain('“中文选段依据”');
+    expect(noSource.instructions).toContain('不得无意义夹杂外语单词、半句或错译残片');
     expect(noSource.instructions).not.toContain('当前输入包含实际取回的外文来源');
     f.store.put('sources', {id: randomUUID(), bookId: f.book.id, discussionId: root.id, fileVersionId: null, language: 'zh-CN', title: 'Chinese translation', version: 'Chinese edition', locator: 'Chapter 1', url: 'https://example.org/zh', quote: '只有中文译句', evidenceHash: 'fixture', retrieval: 'retrieved', verification: 'confirmed', selected: true, reason: '', createdAt: now()});
     f.store.put('sources', {id: randomUUID(), bookId: f.book.id, discussionId: root.id, fileVersionId: null, language: 'en', title: 'Not fetched', version: '', locator: '', url: 'https://example.org/en', quote: 'UNRETRIEVED_ENGLISH', evidenceHash: '', retrieval: 'fetch_failed', verification: 'unverified', selected: true, reason: 'failed', createdAt: now()});
