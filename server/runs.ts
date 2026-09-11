@@ -49,7 +49,7 @@ export class RunManager {
    if(['completed','failed','cancelled'].includes(next.status)){terminal=true;this.active.delete(run.id);await hooks.onTerminal?.(next);}
   };
   try{
-   const handle=await this.adapter.start({runId:run.id,bookId:run.bookId,discussionId:run.discussionId,purpose:run.purpose,contextSnapshotId:context.id,input:context.input,session:sessionId?{mode:'resume',cliSessionId:sessionId}:{mode:'new'},outputSchema});
+   const handle=await this.adapter.start({runId:run.id,bookId:run.bookId,discussionId:run.discussionId,purpose:run.purpose,contextSnapshotId:context.id,input:context.input,session:sessionId?{mode:'resume',cliSessionId:sessionId}:{mode:'new'},outputSchema,model:this.store.getIdempotent('ai.model') as string|undefined});
    for await(const event of handle.events)await record(event);
    if(!terminal)throw new AppError('INCOMPLETE_RUN','运行结束但缺少完整结果。',502,true);
   }catch(error){

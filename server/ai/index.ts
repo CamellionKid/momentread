@@ -247,7 +247,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
         return {runId: request.runId, events};
       }
       const sessionId = request.session.mode === 'resume' ? request.session.cliSessionId : randomUUID();
-      const proc = spawn(binary, claudeArguments(request, sessionId, options.model), {cwd, env: environment(), stdio: ['pipe', 'pipe', 'pipe']});
+      const proc = spawn(binary, claudeArguments(request, sessionId, request.model ?? options.model), {cwd, env: environment(), stdio: ['pipe', 'pipe', 'pipe']});
       let resolveClose!: () => void;
       const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolRequestCounts: new Map(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], runtimeDeadlineArmed: false, cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
       runs.set(request.runId, state);
