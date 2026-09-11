@@ -10,6 +10,26 @@
 
 **当前状态：阅读与学习主链已完成实际验收；自动原著发现和最终提交盲测尚未放行。** 生产入口位于仓库根目录。额度恢复后真实首次调用、明确接续、小结和今日总结均通过。原著自动检索仍有明确阻塞：本机 Claude provider 的 WebSearch 返回零条结果，不能宣称自动匹配已可用。候选独立取回与文字核对已有另外的实测，二者不能混为一谈。当前验证状态见 [开发清单](docs/development/STATUS.md)、[首版验收](docs/development/ACCEPTANCE.md)、[独立系统测试](docs/development/SYSTEM-TESTS.md) 和 [Claude 实测](docs/development/CLAUDE.md)。
 
+## 快速开始
+
+1. **装 Claude Code**（MomentRead 通过它调用 AI）：`curl -fsSL https://claude.ai/install.sh | bash`，然后 `claude auth login` 登录一次。已有配置不用重复登录。
+2. **跑起来**（需 Node 22.23，见 [.nvmrc](.nvmrc)）：
+
+   ```sh
+   git clone https://github.com/CamellionKid/momentread.git
+   cd momentread
+   npm ci
+   npm run build
+   npm start
+   ```
+
+   打开 <http://127.0.0.1:4317>。
+3. **上传 EPUB**：在空书架页面点导入，选择一个未加密、可选文字的 EPUB 文件。应用会保存原文件副本与指纹，之后移动或删除原文件不影响书库。
+4. **开始学习**：在正文选中一段不懂的文字 → 点击「解析一下」→ 在 AI 回答里选中想深入的概念 → 「展开选中的概念」逐层追问 → 「整理并返回」回到阅读主线。
+5. **确认 AI 正常**：首次使用建议先跑 `npm run test:live -- first` 做真实调用自检（会消耗少量额度）。
+
+更详细的每一步说明在下方「[准备环境](#准备环境)」「[安装与启动](#安装与启动)」「[使用流程](#使用流程)」。
+
 ## 准备环境
 
 - 首版目标：macOS + Chrome 桌面浏览器。Safari、Codex 内嵌浏览器及其他平台不在当前已承诺的支持范围。
