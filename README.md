@@ -1,6 +1,10 @@
 # MomentRead
 
+[![CI](https://github.com/CamellionKid/momentread/actions/workflows/ci.yml/badge.svg)](https://github.com/CamellionKid/momentread/actions/workflows/ci.yml)
+
 在浏览器里阅读 EPUB，遇到不懂的段落时请求 AI 解析；把概念展开成独立分支，再整理并返回原来的阅读思路。
+
+各版本更新内容见 [CHANGELOG.md](CHANGELOG.md)。
 
 ![书架](docs/assets/screenshot-library.png)
 
