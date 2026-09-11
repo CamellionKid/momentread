@@ -12,7 +12,7 @@
 - 新讨论显式生成 UUID；接续仅使用指定的 `--resume UUID`，不使用 `--continue`、最近会话推断、任意历史分叉或全局会话扫描。
 - `--safe-mode`、空 setting sources、空 MCP 配置与 `--strict-mcp-config` 隔离用户 hooks、plugins、skills、MCP。`system/init` 再次核对实际工具、插件和 MCP，越界即中止。
 - `discussion/summary/daily` 不开放外部工具；`matching` 仅开放 WebSearch/WebFetch。结构化输出允许 CLI 自带的 `StructuredOutput`，它不授予文件或网络能力。
-- 权限使用 `manual`、host、stdio。网络请求逐次转交界面；只允许本次或拒绝，不写永久权限，也不启用 bypass。
+- 权限使用 `manual`、host、stdio。每个 matching 运行只向界面询问一次；允许或拒绝只覆盖该运行的 WebSearch／WebFetch，不写永久权限，也不启用 bypass。适配器限制每轮最多 3 次 WebSearch 和 5 次 WebFetch，超额请求自动拒绝。
 - 只从既有 Claude `settings.json` 的 `env` 提取认证、endpoint 和模型映射白名单；进程环境优先。不会继承该文件的权限规则、插件或 hooks，不输出凭据值。
 - 默认单次运行最长 300 秒。取消先 SIGINT，5 秒未退出再 SIGKILL；正常结果也要等待进程清洁退出才可接续。取消和强停的会话均标为不可接续，由学习服务下次以显式背景新建。
 - 在异步查找程序／创建目录前预留 discussion，防止并发启动竞争；尚未 spawn 的任务也可以取消。
@@ -28,7 +28,7 @@
 | initialized | `cliSessionId`，附实际 `tools/model` |
 | text_delta | `text`；UTF-8 用 StringDecoder，完整 assistant 快照不重复追加 |
 | permission_required | `requestId/toolName/input/description` |
-| permission_resolved | `requestId/toolName/decision`；过期或重复回答返回 409 |
+| permission_resolved | `requestId/toolName/decision/resolvedCount`；decision 为 allowRun 或 denyRun，过期或重复回答返回 409 |
 | retrying | `attempt/maxRetries/delayMs`，附 allowlist `errorCategory` 和可选 HTTP `status`；不输出凭据或原始 provider 错误 |
 | completed | `text/structuredOutput?/sessionReusable:true/toolResults` |
 | cancelled | `text/sessionReusable:false/forced` |
@@ -45,7 +45,7 @@ npm exec vitest -- run tests/unit/claude.test.ts
 npm run typecheck
 ```
 
-协议／进程测试覆盖：逐字节切分中文及 emoji、无结尾换行、无效／超大 NDJSON、增量与快照去重、子 agent 文本隔离、诊断脱敏、工具白名单、明确 resume、事件归属、越界工具拒绝、permission allowOnce/deny、正常与异常退出、SIGINT/SIGKILL、启动并发竞争、spawn 前取消、静默超时、工具失败与模型完成分离。
+协议／进程测试覆盖：逐字节切分中文及 emoji、无结尾换行、无效／超大 NDJSON、增量与快照去重、子 agent 文本隔离、诊断脱敏、工具白名单、明确 resume、事件归属、越界工具拒绝、单次 allowRun/denyRun、并发请求合并、后续请求沿用运行决定、工具次数上限、正常与异常退出、SIGINT/SIGKILL、启动并发竞争、spawn 前取消、静默超时、工具失败与模型完成分离。
 
 这些使用合成 CLI fixture，验证产品协议，不冒充真实模型测试。临时测试文件在独立系统临时目录，结束后清理。
 
@@ -110,7 +110,15 @@ CLI initialized.model 均为 `claude-opus-4-8[1m]`；此次 first 和 search 明
 
 WebSearch 这次没有复现早先 403，不能继续把当前失败归因为 403，也不能仅凭一次空查询认定 provider 永久不支持搜索。观察事实是：同一配置的普通推理和固定 URL 取回恢复，公开搜索没有给出本次查询的有效结果。没有为寻找成功截图而重复搜索或切换供应商。
 
-复验原始日志位于本机忽略目录 `tmp/claude-recovery/`。首次 search 探针当时只检查 is_error，退出码 0 曾造成过宽的成功判定；已修正探针，新增 resultCount 和 query／REMINDER 排除测试。对该真实工具结果离线重放得到 `transportSuccess=true/resultCount=0/searchAcceptancePassed=false`，未额外发起模型调用。24 项 Claude 模块测试覆盖空搜索门槛及瞬时 API 错误后恢复；全仓类型检查通过。这不代替完整系统与盲测验收。
+复验原始日志位于本机忽略目录 `tmp/claude-recovery/`。首次 search 探针当时只检查 is_error，退出码 0 曾造成过宽的成功判定；已修正探针，新增 resultCount 和 query／REMINDER 排除测试。对该真实工具结果离线重放得到 `transportSuccess=true/resultCount=0/searchAcceptancePassed=false`，未额外发起模型调用。当前 26 项 Claude 模块测试覆盖空搜索门槛、瞬时 API 错误后恢复和单轮权限合并；全仓类型检查通过。这不代替完整系统与盲测验收。
+
+## 首次使用盲测发现的权限提示风暴与修复
+
+最终候选 `e4948e0` 的全新上下文盲测在一次真实原著匹配中遇到 49 次人工确认。SQLite 事件复核显示，这些是 Claude 并行产生的不同 WebSearch／WebFetch 请求，不是 SSE 重放；逐调用的 allowOnce 语义会把底层工具粒度暴露给读者，构成首次使用阻塞。
+
+修复后，当前 matching 运行只显示一个决定条，并由 adapter 结清同轮并发请求；后续允许范围内的请求自动沿用本次决定，其他运行仍重新询问。提示词和 adapter 同时限制最多 3 次搜索、5 次取回；即使模型忽略提示也不能越过硬上限。合成 CLI 测试验证并发合并、后续调用、拒绝和超额拒绝。
+
+2026-09-11 04:04 UTC 的真实 `search` 探针运行 `0f050f7e-dfa6-4bf3-b955-197613c4fbc5` 只产生一次 required → resolved(allowRun)，随后完成；WebSearch 仍返回零链接，因此搜索验收保持失败。04:06–04:07 UTC 在真实《虚无主义》产品界面运行 `aadc10e4-c304-472e-99ac-5163c4b42694`：只显示一个授权条，一次点击结清 2 个并发请求，随后 20 秒观察期没有再次出现。运行最终返回空候选且工具不可用，界面继续标记“原著尚未核对”。这证明权限交互修复，不证明自动原著发现可用。
 
 ## 来源
 

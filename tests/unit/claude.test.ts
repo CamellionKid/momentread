@@ -106,15 +106,39 @@ describe('Claude process policy', () => {
       expect(events.at(-1)).toMatchObject({type: 'failed', data: {code: 'CLI_ISOLATION_FAILED', sessionReusable: false}});
     } finally { await fake.cleanup(); }
   });
-  it.each(['allowOnce', 'deny'] as const)('round-trips host permission %s without persistent grants', async decision => {
-    const fake = await fixture(`${listen}function handle(m){if(m.type==='user'){${init}console.log(JSON.stringify({type:'control_request',request_id:'permission-1',request:{subtype:'can_use_tool',tool_name:'WebFetch',input:{url:'https://example.org'}}}));}if(m.type==='control_response'){const r=m.response.response;if(r.updatedPermissions)process.exit(2);console.log(JSON.stringify({type:'result',subtype:'success',result:r.behavior+(r.updatedInput?':'+r.updatedInput.url:'')}));process.stdin.on('end',()=>process.exit(0));}}`);
+  it.each(['allowRun', 'denyRun'] as const)('applies one host permission decision to the whole matching run: %s', async decision => {
+    const fake = await fixture(`${listen}let responses=[];function handle(m){if(m.type==='user'){${init}for(let i=1;i<=3;i++)console.log(JSON.stringify({type:'control_request',request_id:'permission-'+i,request:{subtype:'can_use_tool',tool_name:i===3?'WebFetch':'WebSearch',input:i===3?{url:'https://example.org'}:{query:'query-'+i}}}));}if(m.type==='control_response'){responses.push(m.response.response);if(responses.length===3){console.log(JSON.stringify({type:'result',subtype:'success',result:responses.map(r=>r.behavior).join(',')}));process.stdin.on('end',()=>process.exit(0));}}}`);
     try {
       const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
       const req = request('matching'); const handle = await adapter.start(req); const events: RunEvent[] = [];
       for await (const event of handle.events) { events.push(event); if (event.type === 'permission_required') await adapter.answerPermission(req.runId, String(event.data.requestId), decision); }
-      expect(events.at(-1)).toMatchObject({type: 'completed', data: {text: decision === 'allowOnce' ? 'allow:https://example.org' : 'deny'}});
-      expect(events.some(event => event.type === 'permission_resolved' && event.data.decision === decision)).toBe(true);
+      expect(events.filter(event => event.type === 'permission_required')).toHaveLength(1);
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {text: decision === 'allowRun' ? 'allow,allow,allow' : 'deny,deny,deny'}});
+      const resolved = events.find(event => event.type === 'permission_resolved');
+      expect(resolved).toMatchObject({data: {decision}});
+      expect(Number(resolved?.data.resolvedCount)).toBeGreaterThanOrEqual(1);
+      expect(Number(resolved?.data.resolvedCount)).toBeLessThanOrEqual(3);
       await expect(adapter.answerPermission(req.runId, 'permission-1', decision)).rejects.toMatchObject({code: 'PERMISSION_EXPIRED'});
+    } finally { await fake.cleanup(); }
+  });
+  it('automatically applies the run decision to later matching requests', async () => {
+    const fake = await fixture(`${listen}let responses=[];function ask(id,tool){console.log(JSON.stringify({type:'control_request',request_id:id,request:{subtype:'can_use_tool',tool_name:tool,input:tool==='WebSearch'?{query:id}:{url:'https://example.org/'+id}}}));}function handle(m){if(m.type==='user'){${init}ask('permission-1','WebSearch');}if(m.type==='control_response'){responses.push(m.response.response.behavior);if(responses.length===1)ask('permission-2','WebFetch');else{console.log(JSON.stringify({type:'result',subtype:'success',result:responses.join(',')}));process.stdin.on('end',()=>process.exit(0));}}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const req = request('matching'); const handle = await adapter.start(req); const events: RunEvent[] = [];
+      for await (const event of handle.events) { events.push(event); if (event.type === 'permission_required') await adapter.answerPermission(req.runId, String(event.data.requestId), 'allowRun'); }
+      expect(events.filter(event => event.type === 'permission_required')).toHaveLength(1);
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {text: 'allow,allow'}});
+    } finally { await fake.cleanup(); }
+  });
+  it('caps excessive matching searches even after the run is approved', async () => {
+    const fake = await fixture(`${listen}let responses=[];function handle(m){if(m.type==='user'){${init}for(let i=1;i<=5;i++)console.log(JSON.stringify({type:'control_request',request_id:'permission-'+i,request:{subtype:'can_use_tool',tool_name:'WebSearch',input:{query:'query-'+i}}}));}if(m.type==='control_response'){responses.push(m.response.response.behavior);if(responses.length===5){responses.sort();console.log(JSON.stringify({type:'result',subtype:'success',result:responses.join(',')}));process.stdin.on('end',()=>process.exit(0));}}}`);
+    try {
+      const adapter = createClaudeAdapter({...fake, maxRunMs: 2000, shutdownGraceMs: 100});
+      const req = request('matching'); const handle = await adapter.start(req); const events: RunEvent[] = [];
+      for await (const event of handle.events) { events.push(event); if (event.type === 'permission_required') await adapter.answerPermission(req.runId, String(event.data.requestId), 'allowRun'); }
+      expect(events.filter(event => event.type === 'permission_required')).toHaveLength(1);
+      expect(events.at(-1)).toMatchObject({type: 'completed', data: {text: 'allow,allow,allow,deny,deny'}});
     } finally { await fake.cleanup(); }
   });
   it('cancels an uncooperative process and marks its session unsafe to resume', async () => {

@@ -28,7 +28,7 @@ async function run(request: StartRun, options: {cancel?: boolean; deny?: boolean
     events.push(event);
     // Synthetic input/output only; never print auth status fields other than booleans.
     if (event.type !== 'text_delta') console.log(JSON.stringify(event));
-    if (event.type === 'permission_required') await adapter.answerPermission(request.runId, String(event.data.requestId), options.deny ? 'deny' : 'allowOnce');
+    if (event.type === 'permission_required') await adapter.answerPermission(request.runId, String(event.data.requestId), options.deny ? 'denyRun' : 'allowRun');
     if (options.cancel && event.type === 'initialized') cancelTimer = setTimeout(() => {if (!cancelling) {cancelling = true; void adapter.cancel(request.runId)}}, 4000);
     if (options.cancel && event.type === 'text_delta' && !cancelling) { cancelling = true; void adapter.cancel(request.runId); }
   }

@@ -6591,8 +6591,8 @@
           "decision": {
             "type": "string",
             "enum": [
-              "allowOnce",
-              "deny"
+              "allowRun",
+              "denyRun"
             ]
           }
         },

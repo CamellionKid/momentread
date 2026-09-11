@@ -24,9 +24,11 @@ export interface ClaudeAdapterOptions {
   logger?: (diagnostic: string) => void;
 }
 type PendingPermission = {toolName: string; input: Record<string, unknown>};
+type NetworkDecision = 'allowRun' | 'denyRun';
 type Active = {
   request: StartRun; proc: ChildProcessWithoutNullStreams; queue: AsyncQueue<RunEvent>;
   seq: number; permissions: Map<string, PendingPermission>; text: TextAccumulator;
+  networkDecision?: NetworkDecision; toolRequestCounts: Map<string, number>;
   cancelled: boolean; forced: boolean; closed: boolean; failure?: {code: string; message: string};
   apiFailure?: CliFailure; lastRetry?: CliFailure;
   result?: Record<string, any>; sessionId?: string; closePromise: Promise<void>; resolveClose: () => void;
@@ -35,6 +37,7 @@ type Active = {
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const allowedFor = (request: StartRun) => request.purpose === 'matching' ? ['WebSearch', 'WebFetch'] : [];
+const networkToolLimits: Record<string, number> = {WebSearch: 3, WebFetch: 5};
 
 export function claudeArguments(request: StartRun, sessionId: string, model?: string): string[] {
   const tools = allowedFor(request);
@@ -167,8 +170,19 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
         write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: {behavior: 'deny', message: 'This tool is outside the reading task.'}}});
         emit(state, 'permission_resolved', {requestId, toolName, decision: 'deny', reason: 'tool_not_allowed'}); return;
       }
+      const requestCount = (state.toolRequestCounts.get(toolName) ?? 0) + 1;
+      state.toolRequestCounts.set(toolName, requestCount);
+      if (requestCount > (networkToolLimits[toolName] ?? 0)) {
+        write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: {behavior: 'deny', message: 'This matching run reached its public-network request limit. Use the evidence already collected.'}}});
+        return;
+      }
+      if (state.networkDecision) {
+        write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: state.networkDecision === 'allowRun' ? {behavior: 'allow', updatedInput: input} : {behavior: 'deny', message: 'The user denied public-network access for this matching run. Do not retry it.'}}});
+        return;
+      }
+      const needsPrompt = state.permissions.size === 0;
       state.permissions.set(requestId, {toolName, input});
-      emit(state, 'permission_required', {requestId, toolName, input, description: '允许这一次公开网络查询或页面取回？'});
+      if (needsPrompt) emit(state, 'permission_required', {requestId, toolName, input, description: '本次原著检索会使用 WebSearch／WebFetch 访问公开网络。允许后，同一轮检索无需逐条确认；最多执行 3 次搜索和 5 次正文取回。'});
     }
     if (message.type === 'system' && message.subtype === 'permission_denied') emit(state, 'permission_resolved', {requestId: String(message.tool_use_id || ''), toolName: String(message.tool_name || ''), decision: 'deny'});
     if (message.type === 'result') {
@@ -219,7 +233,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       const sessionId = request.session.mode === 'resume' ? request.session.cliSessionId : randomUUID();
       const proc = spawn(binary, claudeArguments(request, sessionId, options.model), {cwd, env: environment(), stdio: ['pipe', 'pipe', 'pipe']});
       let resolveClose!: () => void;
-      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
+      const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, permissions: new Map(), text: new TextAccumulator(), toolRequestCounts: new Map(), toolCalls: new Map(), toolQueries: new Map(), toolResults: [], cancelled: false, forced: false, closed: false, closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
       runs.set(request.runId, state);
       const decoder = new JsonLineDecoder(message => handle(state, message));
       let stderrBytes = 0;
@@ -252,9 +266,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
       const state = runs.get(runId);
       const permission = state?.permissions.get(requestId);
       if (!state || !permission || state.cancelled || state.closed) throw new AppError('PERMISSION_EXPIRED', '这次权限请求已结束。', 409);
-      state.permissions.delete(requestId);
-      write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: decision === 'allowOnce' ? {behavior: 'allow', updatedInput: permission.input} : {behavior: 'deny', message: 'The user did not allow this network request. Do not retry it.'}}});
-      emit(state, 'permission_resolved', {requestId, toolName: permission.toolName, decision});
+      state.networkDecision = decision;
+      const pending = [...state.permissions.entries()];
+      state.permissions.clear();
+      for (const [pendingId, item] of pending) write(state, {type: 'control_response', response: {subtype: 'success', request_id: pendingId, response: decision === 'allowRun' ? {behavior: 'allow', updatedInput: item.input} : {behavior: 'deny', message: 'The user denied public-network access for this matching run. Do not retry it.'}}});
+      emit(state, 'permission_resolved', {requestId, toolName: permission.toolName, decision, resolvedCount: pending.length});
     }
   };
 }

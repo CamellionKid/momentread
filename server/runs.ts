@@ -57,6 +57,6 @@ export class RunManager {
   }finally{this.active.delete(run.id)}
  }
  async cancel(runId:string){const run=this.store.get('runs',runId);if(!run)throw new AppError('NOT_FOUND','找不到运行。',404);if(!this.active.has(runId))return;await this.adapter.cancel(runId);}
- async permission(runId:string,requestId:string,decision:'allowOnce'|'deny'){if(!this.active.has(runId))throw new AppError('PERMISSION_EXPIRED','该权限请求已失效。',409);await this.adapter.answerPermission(runId,requestId,decision);}
+ async permission(runId:string,requestId:string,decision:'allowRun'|'denyRun'){if(!this.active.has(runId))throw new AppError('PERMISSION_EXPIRED','该权限请求已失效。',409);await this.adapter.answerPermission(runId,requestId,decision);}
  async shutdown(){await Promise.allSettled([...this.active.keys()].map(id=>this.adapter.cancel(id)))}
 }

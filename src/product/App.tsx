@@ -409,13 +409,13 @@ export default function App() {
                   await api.permission(
                     permission.runId,
                     permission.requestId,
-                    "deny",
+                    "denyRun",
                   );
                   await model.refresh();
                 })
               }
             >
-              拒绝
+              拒绝本次检索
             </button>
             <button
               className="primary small"
@@ -425,13 +425,13 @@ export default function App() {
                   await api.permission(
                     permission.runId,
                     permission.requestId,
-                    "allowOnce",
+                    "allowRun",
                   );
                   await model.refresh();
                 })
               }
             >
-              允许这一次
+              允许本次检索
             </button>
           </div>
         </div>

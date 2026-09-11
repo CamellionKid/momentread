@@ -25,7 +25,7 @@
 | GET /api/runs/:id | 无 | Run |
 | GET /api/runs/:id/events | Last-Event-ID或?after=seq | SSE RunEvent |
 | POST /api/runs/:id/cancel | 无 | {ok:true} |
-| POST /api/runs/:id/permission | {requestId,decision:allowOnce或deny} | {ok:true} |
+| POST /api/runs/:id/permission | {requestId,decision:allowRun或denyRun} | {ok:true}（只作用于当前 matching 运行） |
 | GET /api/books/:id/report?date=YYYY-MM-DD&timezone=Asia/Shanghai | 无 | {book,date,timezone,activities,discussions,summaries,concepts,sources,advice} |
 | POST /api/books/:id/report?date=YYYY-MM-DD&timezone=Asia/Shanghai | 无 | {runId}（202；可重复生成，GET 取同日期时区最新成功结果，历史运行保留） |
 | GET /api/books/:id/report.html?date=...&timezone=... | 无 | 独立HTML下载 |

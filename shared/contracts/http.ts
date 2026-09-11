@@ -5,7 +5,7 @@ export const WorkspacePatchSchema=z.object({position:PositionSchema.nullable().o
 export const DiscussionPatchSchema=z.object({draft:z.string().max(100000).optional(),scrollTop:z.number().nonnegative().optional()}).strict();
 export const MessageRequestSchema=z.object({text:z.string().min(1).max(20000)});
 export const SourcePatchSchema=z.object({selected:z.boolean().optional(),verification:z.enum(['unverified','confirmed','conflict']).optional()}).strict();
-export const PermissionRequestSchema=z.object({requestId:z.string().min(1),decision:z.enum(['allowOnce','deny'])});
+export const PermissionRequestSchema=z.object({requestId:z.string().min(1),decision:z.enum(['allowRun','denyRun'])});
 
 import {BookSchema,WorkspaceSchema,DiscussionSchema,MessageSchema,SummarySchema,ReceiptSchema,SourceSchema,ConceptSchema,RunSchema,ActivitySchema} from './index';
 export const RunStartResponseSchema=z.object({runId:Id});

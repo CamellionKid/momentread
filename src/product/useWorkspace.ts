@@ -301,15 +301,13 @@ export function useWorkspace(onError: (message: string) => void) {
                   input: event.data.input,
                 };
                 setPermissions((previous) => [
-                  ...previous.filter((p) => p.requestId !== item.requestId),
+                  ...previous.filter((p) => p.runId !== item.runId),
                   item,
                 ]);
               }
               if (event.type === "permission_resolved")
                 setPermissions((previous) =>
-                  previous.filter(
-                    (p) => p.requestId !== String(event.data.requestId),
-                  ),
+                  previous.filter((p) => p.runId !== id),
                 );
               if (["completed", "failed", "cancelled"].includes(event.type))
                 void refresh();

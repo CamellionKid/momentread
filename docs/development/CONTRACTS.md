@@ -17,7 +17,7 @@ AI 导出 createClaudeAdapter(options?)，实现 ClaudeAdapter。事件 envelope
 - initialized：`data={cliSessionId:"...",runtimeVersion:"...",capabilities:[]}`。
 - text_delta：`data={text:"新增文字"}`，不是整段替换。
 - permission_required：`data={requestId:"...",toolName:"WebSearch",input:{query:"..."},description:"..."}`。
-- permission_resolved：`data={requestId:"...",decision:"allowOnce"}`。
+- permission_resolved：`data={requestId:"...",decision:"allowRun",resolvedCount:2}`。一次决定只覆盖当前 matching 运行允许的 WebSearch／WebFetch；不写永久规则。
 - retrying：`data={attempt:1,delayMs:1000,category:"...",errorCategory:"rate_limit",status:429}`。`errorCategory` 与 `status` 可选；分类使用固定白名单，HTTP 状态限制为 400–599，不透传 provider 原始错误或凭据。
 - completed：`data={text:"完整最终文字",structuredOutput:可选JSON,sessionReusable:true,toolResults:可选数组}`。discussion/daily消费text；summary消费严格`{content:string}`；matching消费严格`{candidates:[{url,title,language,version,quote,locator,reason}]}`。toolResults中的失败不能当作检索成功。
 - cancelled：`data={partialText:"...",sessionReusable:false}`；保留已有片段，不再追加。
@@ -30,3 +30,5 @@ AI 导出 createClaudeAdapter(options?)，实现 ClaudeAdapter。事件 envelope
 新建 daily 运行在 queued 时即保存 `reportTarget={date,timezone}`，成功、失败和重启中断均保留；它是用户请求的阅读日期，不是运行创建日期。界面按 bookId、purpose、date、timezone 查找最新尝试，失败后显示原因和重试，并保留此前成功的建议。旧的成功运行可从 result 中读取日期；旧失败记录没有明确目标时不得根据 createdAt 猜测阅读日期。
 
 工作区的规范 ID 等于 bookId。新导入和 HTTP 读取使用同一记录；旧版非规范 ID 在首次访问时按该书最新 updatedAt 复制到规范记录，保留旧记录以避免删除历史。已有规范记录优先，不被旧记录覆盖。
+
+matching 的网络许可按运行隔离。第一个允许范围内的工具请求产生一条 `permission_required`；同一运行并发到达的其他请求先挂起，不额外制造界面提示。`allowRun`／`denyRun` 会结清当时挂起的请求，并自动应用于该运行后续请求。适配器硬限制每轮最多 3 次 WebSearch 和 5 次 WebFetch，超额调用自动拒绝；其他运行和后续运行仍需重新决定。

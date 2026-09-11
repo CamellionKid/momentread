@@ -85,7 +85,7 @@ npm run test:live -- first
 npm run test:live -- search
 ```
 
-`search` 探针只执行公开测试查询，并自动允许该用例的网络权限；产品界面中的网络请求则逐次询问「允许这一次／拒绝」。当前环境的公开网络工具失败记录见 [Claude 实测](docs/development/CLAUDE.md)。
+`search` 探针只执行公开测试查询，并自动允许该用例的网络权限。产品界面在每次原著匹配运行开始时询问一次「允许本次检索／拒绝本次检索」；允许范围只覆盖该运行的 WebSearch／WebFetch，最多 3 次搜索和 5 次正文取回，不写入永久权限。当前环境的公开网络工具结果见 [Claude 实测](docs/development/CLAUDE.md)。
 
 ### 已有 provider 配置如何进入 CLI
 

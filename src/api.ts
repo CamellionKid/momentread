@@ -20,7 +20,7 @@ export const api={
  confirm:(id:string,content:string,requestId:string)=>post<{summary:SummaryVersion;parentId:string|null}>(`/summaries/${id}/confirm`,{content,requestId}),
  history:(id:string)=>request<SummaryVersion[]>(`/discussions/${id}/history`),matching:(id:string)=>post<{runId:string}>(`/discussions/${id}/matching`),
  source:(id:string,body:{selected?:boolean;verification?:'unverified'|'confirmed'|'conflict'})=>patch<SourceCandidate>(`/sources/${id}`,body),
- run:(id:string)=>request<Run>(`/runs/${id}`),cancel:(id:string)=>post<{ok:true}>(`/runs/${id}/cancel`),permission:(id:string,requestId:string,decision:'allowOnce'|'deny')=>post<{ok:true}>(`/runs/${id}/permission`,{requestId,decision}),
+ run:(id:string)=>request<Run>(`/runs/${id}`),cancel:(id:string)=>post<{ok:true}>(`/runs/${id}/cancel`),permission:(id:string,requestId:string,decision:'allowRun'|'denyRun')=>post<{ok:true}>(`/runs/${id}/permission`,{requestId,decision}),
  report:(id:string,date:string,timezone:string)=>request<DailyReport>(`/books/${id}/report?date=${date}&timezone=${encodeURIComponent(timezone)}`),
  generateReport:(id:string,date:string,timezone:string)=>post<{runId:string}>(`/books/${id}/report?date=${date}&timezone=${encodeURIComponent(timezone)}`),
  backup:()=>post<{id:string}>('/backups'),restore:(file:File)=>upload<{ok:true}>('/restore',file),

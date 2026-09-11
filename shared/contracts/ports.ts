@@ -21,7 +21,7 @@ export interface BookLibrary {
 export interface RuntimeProbe {installed:boolean;version:string|null;authReported:boolean;invocationVerified:boolean;message:string;}
 export interface StartRun {runId:string;bookId:string;discussionId:string;purpose:RunPurpose;contextSnapshotId:string;input:string;session:{mode:'new'}|{mode:'resume';cliSessionId:string};outputSchema?:Record<string,unknown>;}
 export interface RunHandle {runId:string;events:AsyncIterable<RunEvent>;}
-export interface ClaudeAdapter {probe():Promise<RuntimeProbe>;start(request:StartRun):Promise<RunHandle>;cancel(runId:string):Promise<void>;answerPermission(runId:string,requestId:string,decision:'allowOnce'|'deny'):Promise<void>;}
+export interface ClaudeAdapter {probe():Promise<RuntimeProbe>;start(request:StartRun):Promise<RunHandle>;cancel(runId:string):Promise<void>;answerPermission(runId:string,requestId:string,decision:'allowRun'|'denyRun'):Promise<void>;}
 export interface ReaderHandle {restorePosition(position:ReadingPosition):Promise<void>;navigateToReference(reference:TextReference):Promise<void>;setTypography(fontSize:number):void;}
 export interface ReaderProps {book:Book;fileUrl:string;position:ReadingPosition|null;fontSize:number;onReady:()=>void;onSelection:(reference:TextReference)=>void;onRelocate:(position:ReadingPosition)=>void;onError:(message:string)=>void;}
 
