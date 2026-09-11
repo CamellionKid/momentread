@@ -10,10 +10,10 @@ import {hasSuccessfulWebSearchResult} from '../server/ai/protocol';
 
 // Explicit opt-in: real requests consume the user's already-configured Claude quota.
 if (!process.argv.includes('--live')) {
-  console.log('Use: npx tsx scripts/claude-probe.ts --live [first|resume|isolation|cancel|summary|search|fetch|deny]');
+  console.log('Use: npx tsx scripts/claude-probe.ts --live [first|resume|isolation|cancel|summary|language|search|fetch|deny]');
   process.exit(0);
 }
-const mode = process.argv.find(value => ['first', 'resume', 'isolation', 'cancel', 'summary', 'search', 'fetch', 'deny'].includes(value)) || 'first';
+const mode = process.argv.find(value => ['first', 'resume', 'isolation', 'cancel', 'summary', 'language', 'search', 'fetch', 'deny'].includes(value)) || 'first';
 const cwd = await mkdtemp(join(tmpdir(), 'momentread-cli-probe-'));
 const adapter = createClaudeAdapter({cwd, maxRunMs: 120000, shutdownGraceMs: 5000});
 console.log(JSON.stringify({probe: await adapter.probe(), scenario: mode}));
@@ -71,5 +71,19 @@ if (mode === 'cancel') {
   await run(make('Reply exactly: 取消后新运行成功'));
 }
 if (mode === 'summary') await run({...make('Summarize only this synthetic reading note in Chinese: A triangle has three sides. The term side means an edge here.', 'summary'), outputSchema: {type: 'object', properties: {summary: {type: 'string'}}, required: ['summary'], additionalProperties: false}});
+if (mode === 'language') {
+  const prompts = [
+    '请用自然、通顺的简体中文分两段解释：为什么理解概念定义需要结合具体语境。不要使用外语、拉丁字母或网络链接。',
+    '请用一个标题和三点列表说明怀疑与否定的差别。只用简体中文，不要使用外语、拉丁字母或网络链接。',
+    '请用简体中文解释因果关系与相关关系的区别，包含一个具体例子并加粗重点。不要使用外语、拉丁字母或网络链接。'
+  ];
+  for (const [index, prompt] of prompts.entries()) {
+    const events = await run(make(prompt));
+    const output = String(events.at(-1)?.data.text ?? '');
+    const naturalChineseOnly = output.length > 20 && !/[A-Za-z]/.test(output);
+    console.log(JSON.stringify({check: 'natural_chinese_only', sample: index + 1, passed: naturalChineseOnly}));
+    assert.equal(naturalChineseOnly, true);
+  }
+}
 if (mode === 'search') await run(make('Use WebSearch once to locate the official Project Gutenberg website. Then return its homepage URL and say whether the tool actually succeeded. Do not use WebFetch or claim to have read a book.', 'matching'));
 if (mode === 'fetch' || mode === 'deny') await run(make('Use WebFetch exactly once for https://www.gutenberg.org/ and report whether its page title mentions Project Gutenberg. If permission is denied, stop and say DENIED; do not retry and do not use another tool.', 'matching'), {deny: mode === 'deny'});
