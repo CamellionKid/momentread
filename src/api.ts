@@ -13,7 +13,7 @@ export const api={
  books:()=>request<Book[]>('/books'),runtime:()=>request<RuntimeProbe>('/runtime'),state:(id:string)=>request<BookState>(`/books/${id}/state`),
  importBook:(file:File)=>upload<Book>('/books',file),importOriginal:(id:string,file:File)=>upload<FileVersion>(`/books/${id}/originals`,file),
  bookMetadata:(id:string,body:Partial<Pick<Book,'title'|'author'|'language'|'translator'|'edition'|'identifier'>>)=>patch<Book>(`/books/${id}`,body),
- workspace:(id:string,body:Partial<Pick<Workspace,'position'|'activeDiscussionId'|'collapsed'|'fontSize'>>)=>patch<Workspace>(`/books/${id}/workspace`,body),
+ workspace:(id:string,body:Partial<Pick<Workspace,'position'|'activeDiscussionId'|'collapsed'|'fontSize'|'flow'>>)=>patch<Workspace>(`/books/${id}/workspace`,body),
  analyze:(body:AnalysisRequest)=>post<{discussionId:string;runId:string}>('/analyses',body),branch:(body:BranchRequest)=>post<{discussionId:string;runId:string}>('/branches',body),
  discussion:(id:string,body:{draft?:string;scrollTop?:number})=>patch<Discussion>(`/discussions/${id}`,body),
  message:(id:string,text:string)=>post<{runId:string}>(`/discussions/${id}/messages`,{text}),summary:(id:string)=>post<{runId:string}>(`/discussions/${id}/summary`),

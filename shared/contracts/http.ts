@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {Id,PositionSchema} from './index';
 export const BookMetadataPatchSchema=z.object({title:z.string().trim().min(1).max(500).optional(),author:z.string().trim().max(500).optional(),language:z.string().trim().max(100).optional(),translator:z.string().trim().max(500).optional(),edition:z.string().trim().max(1000).optional(),identifier:z.string().trim().max(500).optional()}).strict();
-export const WorkspacePatchSchema=z.object({position:PositionSchema.nullable().optional(),activeDiscussionId:Id.nullable().optional(),collapsed:z.array(Id).optional(),fontSize:z.number().min(16).max(36).optional()}).strict();
+export const WorkspacePatchSchema=z.object({position:PositionSchema.nullable().optional(),activeDiscussionId:Id.nullable().optional(),collapsed:z.array(Id).optional(),fontSize:z.number().min(16).max(36).optional(),flow:z.enum(['scrolled','paginated']).optional()}).strict();
 export const DiscussionPatchSchema=z.object({draft:z.string().max(100000).optional(),scrollTop:z.number().nonnegative().optional()}).strict();
 export const MessageRequestSchema=z.object({text:z.string().min(1).max(20000)});
 export const SourcePatchSchema=z.object({selected:z.boolean().optional(),verification:z.enum(['unverified','confirmed','conflict']).optional()}).strict();

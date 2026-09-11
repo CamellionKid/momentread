@@ -58,7 +58,7 @@ export async function seedScale(dataDir?:string){
       message=addSyntheticAnswer(node);learning.updateDiscussion(node.id,{draft:`深度 ${depth} 的合成草稿，不与兄弟讨论共享。`,scrollTop:0});path.push(node);parent=node;
     }
     const workspace=store.list('workspaces',book.id)[0];
-    store.put('workspaces',{...workspace,activeDiscussionId:parent.id,position:{fileVersionId:book.fileVersionId,cfi:'epubcfi(/6/2[chapter1]!/4/4/1:0)',chapter:'第一章',progress:0.1},collapsed:[],fontSize:22,updatedAt:new Date().toISOString()});
+    store.put('workspaces',{...workspace,activeDiscussionId:parent.id,position:{fileVersionId:book.fileVersionId,cfi:'epubcfi(/6/2[chapter1]!/4/4/1:0)',chapter:'第一章',progress:0.1},collapsed:[],fontSize:22,flow:'scrolled',updatedAt:new Date().toISOString()});
     const retrievedId=randomUUID();const unavailableId=randomUUID();const quote='Synthetic source quotation for UI state testing only.';
     for(const candidate of [
       {id:retrievedId,title:'合成候选 A · retrieved 状态 fixture',quote,evidenceHash:createHash('sha256').update(quote).digest('hex'),retrieval:'retrieved' as const},

@@ -330,8 +330,8 @@ export default function App() {
               </button>
               <button
                 className="icon-button"
-                title="阅读字号"
-                aria-label="阅读字号"
+                title="阅读设置"
+                aria-label="阅读设置"
                 onClick={() => setModal("font")}
               >
                 <TextAa size={20} />
@@ -482,6 +482,7 @@ export default function App() {
                 fileUrl={`/api/files/${state.book.fileVersionId}`}
                 position={state.workspace.position}
                 fontSize={state.workspace.fontSize}
+                flow={state.workspace.flow}
                 analyzed={analyzedRefs}
                 onReady={() => {
                   setReaderReady(true);
@@ -642,7 +643,7 @@ export default function App() {
         />
       )}
       {modal === "font" && state && (
-        <Dialog title="阅读字号" onClose={() => setModal(null)}>
+        <Dialog title="阅读设置" onClose={() => setModal(null)}>
           <label className="setting-row">
             正文字号 <strong>{state.workspace.fontSize} px</strong>
           </label>
@@ -663,8 +664,27 @@ export default function App() {
           >
             留一点时间，读懂一个概念。
           </p>
+          <label className="setting-row">翻页模式</label>
+          <div className="flow-options" role="group" aria-label="翻页模式">
+            <button
+              type="button"
+              className={state.workspace.flow === "scrolled" ? "active" : ""}
+              aria-pressed={state.workspace.flow === "scrolled"}
+              onClick={() => model.workspace({ flow: "scrolled" })}
+            >
+              上下滚动
+            </button>
+            <button
+              type="button"
+              className={state.workspace.flow === "paginated" ? "active" : ""}
+              aria-pressed={state.workspace.flow === "paginated"}
+              onClick={() => model.workspace({ flow: "paginated" })}
+            >
+              左右翻页
+            </button>
+          </div>
           <p className="quiet-note">
-            字号更改会保存到本书，并使用正文位置恢复阅读。
+            设置会保存到本书，并使用正文位置恢复阅读。
           </p>
         </Dialog>
       )}

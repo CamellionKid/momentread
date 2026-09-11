@@ -25,6 +25,7 @@ const state = (id = "book-a"): BookState => ({
     activeDiscussionId: `${id}-root`,
     collapsed: [],
     fontSize: 24,
+    flow: "scrolled" as const,
     updatedAt: date,
   },
   discussions: [

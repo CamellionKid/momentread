@@ -158,7 +158,7 @@ export function useWorkspace(onError: (message: string) => void) {
       patch: Partial<
         Pick<
           Workspace,
-          "position" | "activeDiscussionId" | "collapsed" | "fontSize"
+          "position" | "activeDiscussionId" | "collapsed" | "fontSize" | "flow"
         >
       >,
     ) => {

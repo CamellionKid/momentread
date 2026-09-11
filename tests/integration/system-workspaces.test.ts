@@ -39,4 +39,17 @@ describe('independent workspace identity and legacy-position regression',()=>{
     const again=await restart(reopened);expect((await again.state(book.id)).workspace).toMatchObject({position,activeDiscussionId:discussion.id,collapsed:[discussion.id],fontSize:32});
     expect(again.adapter.starts).toHaveLength(0);
   });
+
+  it('persists the page-turn flow mode through restart and defaults legacy rows to scrolled',async()=>{
+    const h=await harness();const book=await importSynthetic(h);
+    // Simulate a workspace row written before the flow setting existed.
+    const legacyRow:Record<string,unknown>={...h.store.list('workspaces',book.id)[0]};delete legacyRow.flow;
+    h.store.put('workspaces',legacyRow as never);
+    expect((await h.state(book.id)).workspace.flow).toBe('scrolled');
+    const saved=await h.request(`/api/books/${book.id}/workspace`,'PATCH',{flow:'paginated'});expect(saved.status).toBe(200);
+    expect(WorkspaceSchema.parse(await saved.json()).flow).toBe('paginated');
+    const reopened=await restart(h);expect((await reopened.state(book.id)).workspace.flow).toBe('paginated');
+    expect((await reopened.request(`/api/books/${book.id}/workspace`,'PATCH',{flow:'side-scroll'})).status).toBe(400);
+    expect(reopened.adapter.starts).toHaveLength(0);
+  });
 });

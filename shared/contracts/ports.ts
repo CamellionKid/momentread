@@ -23,7 +23,7 @@ export interface StartRun {runId:string;bookId:string;discussionId:string;purpos
 export interface RunHandle {runId:string;events:AsyncIterable<RunEvent>;}
 export interface ClaudeAdapter {probe():Promise<RuntimeProbe>;start(request:StartRun):Promise<RunHandle>;cancel(runId:string):Promise<void>;answerPermission(runId:string,requestId:string,decision:'allowRun'|'denyRun'):Promise<void>;}
 export interface ReaderHandle {restorePosition(position:ReadingPosition):Promise<void>;navigateToReference(reference:TextReference):Promise<void>;setTypography(fontSize:number):void;}
-export interface ReaderProps {book:Book;fileUrl:string;position:ReadingPosition|null;fontSize:number;analyzed?:TextReference[];onReady:()=>void;onSelection:(reference:TextReference)=>void;onRelocate:(position:ReadingPosition)=>void;onError:(message:string)=>void;}
+export interface ReaderProps {book:Book;fileUrl:string;position:ReadingPosition|null;fontSize:number;flow?:'scrolled'|'paginated';analyzed?:TextReference[];onReady:()=>void;onSelection:(reference:TextReference)=>void;onRelocate:(position:ReadingPosition)=>void;onError:(message:string)=>void;}
 
 export interface LearningService {
  createRoot(request:import('./index').AnalysisRequest):import('./index').Discussion;

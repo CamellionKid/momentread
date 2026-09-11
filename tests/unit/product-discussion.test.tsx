@@ -23,6 +23,7 @@ const state = (): BookState => ({
     position: null,
     collapsed: [],
     fontSize: 24,
+    flow: "scrolled" as const,
     updatedAt: time,
   },
   discussions: [

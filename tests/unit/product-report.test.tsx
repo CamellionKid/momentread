@@ -29,6 +29,7 @@ const initialState = (): BookState => ({
     activeDiscussionId: null,
     collapsed: [],
     fontSize: 24,
+    flow: "scrolled" as const,
     updatedAt: savedAt,
   },
   discussions: [],

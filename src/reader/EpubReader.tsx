@@ -184,7 +184,7 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
         await import('../../vendor/foliate-js/paginator.js');
         if (disposed) { loadedBook.destroy(); return; }
         renderer = document.createElement('foliate-paginator') as Renderer;
-        renderer.setAttribute('flow', 'scrolled');
+        renderer.setAttribute('flow', callbacks.current.flow ?? 'scrolled');
         renderer.setAttribute('margin', '28px');
         renderer.setAttribute('gap', '10%');
         renderer.setAttribute('max-inline-size', '760px');
@@ -226,6 +226,17 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
   }, [props.book.id, props.book.fileVersionId, props.fileUrl, retry]);
 
   useEffect(() => { instance.current?.renderer.setStyles(typography(props.fontSize)); }, [props.fontSize]);
+  useEffect(() => {
+    const current = instance.current;
+    const flow = props.flow ?? 'scrolled';
+    if (!current || current.renderer.getAttribute('flow') === flow) return;
+    try {
+      current.renderer.setAttribute('flow', flow);
+      const position = callbacks.current.position;
+      if (position?.cfi && position.fileVersionId === callbacks.current.book.fileVersionId)
+        void current.navigate(validTarget(current.epub, current.epub.resolveCFI(position.cfi))).catch(e => warn(e.message));
+    } catch (e) { warn(e instanceof Error ? e.message : '无法切换翻页模式。'); }
+  }, [props.flow]);
   useEffect(() => {
     if (phase !== 'ready') return;
     for (const content of instance.current?.renderer.getContents() ?? []) paintAnalyzed(content.doc, content.index);

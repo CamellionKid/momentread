@@ -1126,6 +1126,25 @@ input[type="range"] {
 .full-range {
   width: 100%;
 }
+.flow-options {
+  display: flex;
+  gap: 8px;
+}
+.flow-options button {
+  flex: 1;
+  padding: 10px 0;
+  border: 1px solid #4a4c50;
+  border-radius: 8px;
+  background: transparent;
+  color: #b9b9b1;
+  font-size: 14px;
+  cursor: pointer;
+}
+.flow-options button.active {
+  border-color: #8a8a86;
+  background: #303132;
+  color: #e8e8e4;
+}
 .font-preview {
   font-family: var(--serif);
   padding: 25px 0;
