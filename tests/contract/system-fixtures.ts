@@ -57,13 +57,13 @@ export class ControlledAdapter implements ClaudeAdapter {
   async answerPermission(){throw new Error('Permission interaction is outside this synthetic adapter fixture');}
 }
 
-export async function makeHarness(adapter=new ControlledAdapter(),existingDir?:string){
+export async function makeHarness(adapter=new ControlledAdapter(),existingDir?:string,provider:'claude'|'opencode'='claude'){
   const dir=existingDir??await mkdtemp(join(tmpdir(),'momentread-independent-system-'));
   const store=createStore(dir);
   const library=createBookLibrary(store,dir);
   const learning=createLearningService(store);
   const matching=createMatchingService(store,library);
-  const {app}=createApp({store,library,learning,matching,adapter});
+  const {app}=createApp({store,library,learning,matching,adapter,ai:{provider}});
   return {dir,store,library,learning,matching,adapter,app,
     request:(path:string,method='GET',body?:unknown)=>app.request(new Request(`http://localhost${path}`,{method,headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)})),
     async upload(path:string,bytes:Uint8Array,filename='synthetic.epub'){const form=new FormData();form.set('file',new File([Uint8Array.from(bytes)],filename,{type:'application/epub+zip'}));return app.request(new Request(`http://localhost${path}`,{method:'POST',body:form}));},
