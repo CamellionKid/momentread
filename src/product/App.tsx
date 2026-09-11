@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   ArrowLeft,
@@ -276,6 +276,13 @@ export default function App() {
   }
   const root = state?.discussions.find((d) => d.id === node?.rootId);
   const path = state ? ancestry(state.discussions, node?.id ?? null) : [];
+  const analyzedRefs = useMemo(
+    () =>
+      state?.discussions
+        .filter((d) => !d.parentId && d.source)
+        .map((d) => d.source as TextReference) ?? [],
+    [state?.discussions],
+  );
   return (
     <div className="product-app">
       <header className="topbar">
@@ -475,6 +482,7 @@ export default function App() {
                 fileUrl={`/api/files/${state.book.fileVersionId}`}
                 position={state.workspace.position}
                 fontSize={state.workspace.fontSize}
+                analyzed={analyzedRefs}
                 onReady={() => {
                   setReaderReady(true);
                   if (pendingLocate.current) {

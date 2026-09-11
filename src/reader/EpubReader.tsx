@@ -21,6 +21,7 @@ const typography = (size: number) => `
   p { margin-block:1.15em!important; } h1,h2,h3 { font-family:inherit!important; line-height:1.5!important; }
   img,svg { max-width:100%!important; height:auto; } a { text-decoration-color:#787a7f!important; }
   ::selection { background:#4a4c50!important; color:#fff!important; }
+  ::highlight(mr-analyzed) { text-decoration: underline wavy rgba(230,230,226,.55) 1.5px; }
 `;
 
 /** UI-independent foliate adapter: references/positions out, explicit navigation in. */
@@ -64,6 +65,27 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
         const selection = loadedDoc.defaultView?.getSelection(); selection?.removeAllRanges(); selection?.addRange(loadedRange as Range);
       }
     }
+  };
+
+  const paintAnalyzed = (doc: Document, index: number) => {
+    const epub = instance.current?.epub;
+    const win = doc.defaultView;
+    if (!epub || !win?.CSS?.highlights || typeof win.Highlight !== 'function') return;
+    const section = epub.sections[index];
+    const ranges: Range[] = [];
+    for (const reference of callbacks.current.analyzed ?? []) {
+      for (const segment of reference.segments) {
+        if (segment.spineId !== section?.id) continue;
+        try {
+          const target = epub.resolveCFI(segment.cfi);
+          if (!target || target.index !== index || typeof target.anchor !== 'function') continue;
+          const range = target.anchor(doc);
+          if (range && range.toString() === segment.exact) ranges.push(range as Range);
+        } catch { /* 引用的选段与当前章节内容不一致时跳过这一段 */ }
+      }
+    }
+    if (ranges.length) win.CSS.highlights.set('mr-analyzed', new win.Highlight(...ranges));
+    else win.CSS.highlights.delete('mr-analyzed');
   };
 
   useImperativeHandle(ref, () => ({
@@ -134,6 +156,7 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
       doc.addEventListener('keydown', keydown);
       doc.addEventListener('click', links);
       listeners.push(() => { doc.removeEventListener('mouseup', select); doc.removeEventListener('touchend', select); doc.removeEventListener('keyup', keyup); doc.removeEventListener('keydown', keydown); doc.removeEventListener('click', links); });
+      paintAnalyzed(doc, index);
     };
     let flatToc: (TOCItem & { depth: number })[] = [];
     const chapterFor = (index: number) => {
@@ -203,6 +226,10 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
   }, [props.book.id, props.book.fileVersionId, props.fileUrl, retry]);
 
   useEffect(() => { instance.current?.renderer.setStyles(typography(props.fontSize)); }, [props.fontSize]);
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    for (const content of instance.current?.renderer.getContents() ?? []) paintAnalyzed(content.doc, content.index);
+  }, [props.analyzed, phase]);
   const turn = async (direction: -1 | 1, wholeChapter = false) => {
     try {
       const { epub, renderer, navigate } = requiredInstance(); setError(''); setSelectionCount(0); setReferenceSegments([]);
