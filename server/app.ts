@@ -23,6 +23,11 @@ export function createApp(services:Services){
  const storedProvider=store.getIdempotent('ai.provider');
  let currentProvider:Provider=(storedProvider==='claude'||storedProvider==='opencode')&&adapterFor(storedProvider)?storedProvider:initialProvider;
  const runs=new RunManager(store,()=>({adapter:adapterFor(currentProvider)!,provider:currentProvider}));const app=new Hono();
+ // Run starts and runtime switches share this lock so a provider commit never
+ // interleaves with a run pinning the previous adapter.
+ let lockChain:Promise<unknown>=Promise.resolve();
+ const exclusive=<T>(fn:()=>Promise<T>|T):Promise<T>=>{const run=lockChain.then(fn);lockChain=run.then(()=>undefined,()=>undefined);return run;};
+ const startRun:typeof runs.start=(context,purpose,hooks,outputSchema)=>exclusive(()=>runs.start(context,purpose,hooks,outputSchema));
  const matchingUnsupported=()=>new AppError('MATCHING_UNSUPPORTED','当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。',400);
  const supportsMatching=()=>currentProvider!=='opencode';
  // Download capabilities belong to this service instance, never to restored data.
@@ -37,11 +42,11 @@ export function createApp(services:Services){
  async function fileInput(c:any){const length=Number(c.req.header('content-length')||0);if(length>540*1024*1024)throw new AppError('FILE_TOO_LARGE','文件超过允许大小。',413);const data=await c.req.formData();const file=data.get('file');if(!(file instanceof File))throw new AppError('MISSING_FILE','请选择文件。');return {bytes:new Uint8Array(await file.arrayBuffer()),filename:file.name}}
  async function answer(id:string):Promise<Run>{
   const ctx=learning.buildInput(id,'discussion');
-  return runs.start(ctx,'discussion',{onComplete:(event,run)=>{learning.appendAssistant(id,String(event.data.text??run.partialText),run.id)},onTerminal:(run)=>{if(run.status!=='completed'&&run.partialText)learning.appendAssistant(id,run.partialText,run.id,run.status==='failed'?'failed':'interrupted')}});
+  return startRun(ctx,'discussion',{onComplete:(event,run)=>{learning.appendAssistant(id,String(event.data.text??run.partialText),run.id)},onTerminal:(run)=>{if(run.status!=='completed'&&run.partialText)learning.appendAssistant(id,run.partialText,run.id,run.status==='failed'?'failed':'interrupted')}});
  }
  async function match(id:string,continueAnswer=false):Promise<Run>{
   const context=matching.buildInput(id);
-  return runs.start(context,'matching',{onComplete:async(event)=>{const result=event.data.structuredOutput??event.data.text;await matching.complete(id,{result,toolResults:event.data.toolResults??[]})},onTerminal:async(run)=>{if(continueAnswer&&run.status!=='cancelled'){try{await answer(id)}catch(error){const d=discussion(id);store.put('runs',{id:randomUUID(),bookId:d.bookId,discussionId:d.id,purpose:'discussion',status:'failed',contextSnapshotId:context.id,sessionId:null,sessionReusable:false,partialText:'',result:null,error:'解析未能启动，请重新发送问题。',createdAt:now(),updatedAt:now()})}}}},{type:'object',properties:{candidates:{type:'array',items:{type:'object',properties:{url:{type:'string'},title:{type:'string'},language:{type:'string'},version:{type:'string'},quote:{type:'string'},locator:{type:'string'},reason:{type:'string'}},required:['url','title','language','version','quote','locator','reason'],additionalProperties:false}}},required:['candidates'],additionalProperties:false});
+  return startRun(context,'matching',{onComplete:async(event)=>{const result=event.data.structuredOutput??event.data.text;await matching.complete(id,{result,toolResults:event.data.toolResults??[]})},onTerminal:async(run)=>{if(continueAnswer&&run.status!=='cancelled'){try{await answer(id)}catch(error){const d=discussion(id);store.put('runs',{id:randomUUID(),bookId:d.bookId,discussionId:d.id,purpose:'discussion',status:'failed',contextSnapshotId:context.id,sessionId:null,sessionReusable:false,partialText:'',result:null,error:'解析未能启动，请重新发送问题。',createdAt:now(),updatedAt:now()})}}}},{type:'object',properties:{candidates:{type:'array',items:{type:'object',properties:{url:{type:'string'},title:{type:'string'},language:{type:'string'},version:{type:'string'},quote:{type:'string'},locator:{type:'string'},reason:{type:'string'}},required:['url','title','language','version','quote','locator','reason'],additionalProperties:false}}},required:['candidates'],additionalProperties:false});
  }
  const modelKey=()=>`ai.model.${currentProvider}`;
  const legacyModel=store.getIdempotent('ai.model');
@@ -52,23 +57,34 @@ export function createApp(services:Services){
  app.get('/api/runtime',async c=>c.json(await runtimeInfo()));
  app.patch('/api/runtime',async c=>{
   const patch=RuntimePatchSchema.parse(await c.req.json());
+  // Validate the target provider and model before touching any configuration.
+  const targetProvider=patch.provider??currentProvider;
+  const target=adapterFor(targetProvider);
   if(patch.provider!==undefined&&patch.provider!==currentProvider){
-   if(runs.activeCount()>0)throw new AppError('RUNTIME_BUSY','当前有正在进行的生成，请等待结束后再切换 AI 运行时。',409,true);
-   const next=adapterFor(patch.provider);
-   if(!next)throw new AppError('PROVIDER_UNAVAILABLE','该 AI 运行时在当前部署中不可用。',400);
-   const probe=await next.probe();
+   if(!target)throw new AppError('PROVIDER_UNAVAILABLE','该 AI 运行时在当前部署中不可用。',400);
+   const probe=await target.probe();
    if(!probe.installed)throw new AppError('PROVIDER_NOT_INSTALLED',`未检测到 ${patch.provider==='opencode'?'opencode':'Claude Code'}，请先安装并完成登录后再切换。`,400);
-   currentProvider=patch.provider;
-   store.setPreference('ai.provider',currentProvider);
   }
   if(patch.model!==undefined){
-   const current=adapterFor(currentProvider)!;
-   if(!current.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
-   const models=await current.models();
-   if(!models.includes(patch.model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
-   store.setPreference(modelKey(),patch.model);
+   if(!target?.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
+   if(!(await target.models()).includes(patch.model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
   }
-  return c.json(await runtimeInfo());
+  return c.json(await exclusive(async()=>{
+   const effective=patch.provider??currentProvider;
+   if(patch.model!==undefined){
+    // Re-validate inside the lock: a concurrent switch may have moved the provider.
+    const effectiveAdapter=adapterFor(effective)!;
+    if(!effectiveAdapter.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
+    if(!(await effectiveAdapter.models()).includes(patch.model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
+   }
+   if(patch.provider!==undefined&&patch.provider!==currentProvider){
+    if(runs.activeCount()>0)throw new AppError('RUNTIME_BUSY','当前有正在进行的生成，请等待结束后再切换 AI 运行时。',409,true);
+    currentProvider=patch.provider;
+    store.setPreference('ai.provider',currentProvider);
+   }
+   if(patch.model!==undefined)store.setPreference(`ai.model.${effective}`,patch.model);
+   return runtimeInfo();
+  }));
  });
  app.get('/api/books',c=>c.json(store.list('books')));app.post('/api/books',async c=>{const f=await fileInput(c);return c.json(await library.importBook(f.bytes,f.filename),201)});
  app.patch('/api/books/:id',async c=>{const previous=book(c.req.param('id'));const patch=BookMetadataPatchSchema.parse(await c.req.json());const updated={...previous,...patch};store.put('books',updated);return c.json(updated)});
@@ -80,7 +96,7 @@ export function createApp(services:Services){
  app.post('/api/branches',async c=>{const d=learning.createBranch(BranchRequestSchema.parse(await c.req.json()));const w=workspace(d.bookId);store.put('workspaces',{...w,activeDiscussionId:d.id,updatedAt:now()});const run=await answer(d.id);return c.json({discussionId:d.id,runId:run.id},202)});
  app.patch('/api/discussions/:id',async c=>c.json(learning.updateDiscussion(c.req.param('id'),DiscussionPatchSchema.parse(await c.req.json()))));
  app.post('/api/discussions/:id/messages',async c=>{const id=discussion(c.req.param('id')).id;if(runs.busy(id))throw new AppError('RUN_BUSY','请等待当前运行结束。',409,true);const {text}=MessageRequestSchema.parse(await c.req.json());learning.appendUser(id,text);const run=await answer(id);return c.json({runId:run.id},202)});
- app.post('/api/discussions/:id/summary',async c=>{const id=discussion(c.req.param('id')).id;const context=learning.buildInput(id,'summary');const run=await runs.start(context,'summary',{onComplete:(e)=>{const parsed=SummaryOutputSchema.safeParse(e.data.structuredOutput);if(!parsed.success)throw new AppError('INVALID_SUMMARY','未生成有效的结构化小结，请重试。',502,true);learning.createSummaryDraft(context.id,parsed.data.content)}},{type:'object',properties:{content:{type:'string'}},required:['content'],additionalProperties:false});return c.json({runId:run.id},202)});
+ app.post('/api/discussions/:id/summary',async c=>{const id=discussion(c.req.param('id')).id;const context=learning.buildInput(id,'summary');const run=await startRun(context,'summary',{onComplete:(e)=>{const parsed=SummaryOutputSchema.safeParse(e.data.structuredOutput);if(!parsed.success)throw new AppError('INVALID_SUMMARY','未生成有效的结构化小结，请重试。',502,true);learning.createSummaryDraft(context.id,parsed.data.content)}},{type:'object',properties:{content:{type:'string'}},required:['content'],additionalProperties:false});return c.json({runId:run.id},202)});
  app.post('/api/summaries/:id/confirm',async c=>c.json(learning.confirmSummary(c.req.param('id'),ConfirmRequestSchema.parse(await c.req.json()))));
  app.get('/api/discussions/:id/history',c=>{const d=discussion(c.req.param('id'));return c.json(store.list('summaries',d.bookId).filter(s=>s.discussionId===d.id&&s.confirmed).sort((a,b)=>b.version-a.version))});
  app.post('/api/discussions/:id/matching',async c=>{if(!supportsMatching())throw matchingUnsupported();const run=await match(discussion(c.req.param('id')).id);return c.json({runId:run.id},202)});
@@ -92,7 +108,7 @@ export function createApp(services:Services){
  const reportParams=(c:any)=>{const timezone=c.req.query('timezone')||Intl.DateTimeFormat().resolvedOptions().timeZone;return {date:c.req.query('date')||dayAt(now(),timezone),timezone}};
  app.get('/api/books/:id/report',c=>{const p=reportParams(c);return c.json(buildReport(store,c.req.param('id'),p.date,p.timezone))});
  app.get('/api/books/:id/report.html',c=>{const p=reportParams(c);c.header('Content-Type','text/html; charset=utf-8');c.header('Content-Disposition','attachment; filename="MomentRead-reading-summary.html"');return c.body(renderReport(buildReport(store,c.req.param('id'),p.date,p.timezone)))});
- app.post('/api/books/:id/report',async c=>{const p=reportParams(c);const report=buildReport(store,c.req.param('id'),p.date,p.timezone);const d=store.list('discussions',report.book.id).at(-1);if(!d)throw new AppError('NO_DISCUSSION','先完成一次选段讨论，再生成总结。');const ctx={id:randomUUID(),bookId:d.bookId,discussionId:d.id,discussionRevision:d.revision,input:`只根据以下真实记录用中文写阅读总结、未解问题和下一次阅读建议。不得推测掌握率或阅读时长。原文待核的内容保留不确定。\n${JSON.stringify({book:report.book.title,date:report.date,chapter:report.activities.at(-1)?.chapter,summaries:report.summaries.map(s=>s.content),concepts:report.concepts.map(s=>({term:s.title,context:s.context}))})}`,messageIds:[],summaryDependencies:report.summaries.map(s=>({summaryId:s.id,version:s.version})),sourceIds:[],createdAt:now()};store.put('contexts',ctx);const run=await runs.start(ctx,'daily',{reportTarget:p,result:e=>({advice:String(e.data.text??''),date:p.date,timezone:p.timezone,summaryIds:report.summaries.map(s=>s.id)})});return c.json({runId:run.id},202)});
+ app.post('/api/books/:id/report',async c=>{const p=reportParams(c);const report=buildReport(store,c.req.param('id'),p.date,p.timezone);const d=store.list('discussions',report.book.id).at(-1);if(!d)throw new AppError('NO_DISCUSSION','先完成一次选段讨论，再生成总结。');const ctx={id:randomUUID(),bookId:d.bookId,discussionId:d.id,discussionRevision:d.revision,input:`只根据以下真实记录用中文写阅读总结、未解问题和下一次阅读建议。不得推测掌握率或阅读时长。原文待核的内容保留不确定。\n${JSON.stringify({book:report.book.title,date:report.date,chapter:report.activities.at(-1)?.chapter,summaries:report.summaries.map(s=>s.content),concepts:report.concepts.map(s=>({term:s.title,context:s.context}))})}`,messageIds:[],summaryDependencies:report.summaries.map(s=>({summaryId:s.id,version:s.version})),sourceIds:[],createdAt:now()};store.put('contexts',ctx);const run=await startRun(ctx,'daily',{reportTarget:p,result:e=>({advice:String(e.data.text??''),date:p.date,timezone:p.timezone,summaryIds:report.summaries.map(s=>s.id)})});return c.json({runId:run.id},202)});
  app.post('/api/backups',async c=>{const result=await library.backup();backupDownloads.set(result.id,result.path);return c.json({id:result.id})});
  app.get('/api/backups/:id',async c=>{const path=backupDownloads.get(c.req.param('id'));if(!path)throw new AppError('NOT_FOUND','下载链接已失效，请重新创建备份。',404);c.header('Content-Type','application/zip');c.header('Content-Disposition','attachment; filename="MomentRead-backup.zip"');return c.body(await readFile(path))});
  app.post('/api/restore',async c=>{if(store.list('books').length)throw new AppError('RESTORE_REQUIRES_EMPTY','恢复只允许在空书库执行。请保留现有书库并使用新的数据目录。',409);const f=await fileInput(c);await library.restore(f.bytes);store.transaction(()=>{
