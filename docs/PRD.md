@@ -228,7 +228,7 @@ AI 回译、重构的外文不能展示为检索所得原文。无依据的百�
 
 - [Claude Code 程序化调用](https://code.claude.com/docs/en/headless)：首个接入后端；先验证启动、流式响应、接续、取消、权限与会话隔离。
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：第二路线，参考 ThoughtDAG 已有插件；若改为宿主插件需单独评估部署架构，不承诺首版同时支持。
-- [OpenCode Server](https://opencode.ai/docs/server/)：后续 adapter 候选，暂不实施。
+- [opencode](https://opencode.ai)：已作为可选 AI 运行时接入（v0.3.0 起支持设置界面内切换）；原著检索暂不支持，opencode 模式下该功能明确提示不可用。
 
 已有官方资料、CLI 帮助和上游源码研究，尚未对本产品进行端到端接入验证。概念分支优先使用“新会话 + 显式背景快照”，避免依赖尚未验证的任意历史位置 fork；普通追问接续当前讨论会话。直接模型 API 和外部 chatbot 多网页不进入当前首版实施路线。
 

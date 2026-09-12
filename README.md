@@ -58,13 +58,9 @@ MomentRead 不需要额外启动一个 Claude 聊天窗口或 Claude HTTP 服务
 
 ### 可选：使用 opencode 作为 AI 运行时
 
-除 Claude Code 外，MomentRead 也支持用 [opencode](https://opencode.ai) 驱动讨论与小结（原著检索暂不支持，opencode 模式下该功能会明确提示不可用）。安装并登录 opencode 后，以环境变量选择运行时启动：
+除 Claude Code 外，MomentRead 也支持用 [opencode](https://opencode.ai) 驱动讨论与小结（原著检索暂不支持，opencode 模式下该功能会明确提示不可用）。安装并登录 opencode 后，在「AI 连接与本地数据」对话框中即可直接切换运行时（Claude Code / opencode），切换立即生效并持久保存，无需重启；有正在进行的生成时需等其结束后才能切换。
 
-```sh
-MOMENTREAD_AI=opencode npm start
-```
-
-模型可在「AI 连接与本地数据」对话框中下拉选择（列出 `opencode models` 的全部可用模型，选择会持久保存）；也可用 `MOMENTREAD_AI_MODEL=provider/model` 指定默认。未设置 `MOMENTREAD_AI` 时保持 Claude Code 行为不变。
+模型可在同一对话框中下拉选择（列出当前运行时的可用模型，两个运行时的模型选择各自独立保存）；也可用 `MOMENTREAD_AI_MODEL=provider/model` 指定默认模型。`MOMENTREAD_AI=opencode` 环境变量仍可用于指定**首次启动**的默认运行时；一旦在界面中切换过，以界面选择为准。
 
 ## 安装与启动
 

@@ -2,12 +2,17 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.0] - 2026-09-12
 
 ### 新增
 
-- **opencode 作为可选 AI 运行时**：`MOMENTREAD_AI=opencode` 启动即用 opencode 驱动讨论、概念展开、小结与每日总结；原著检索在 opencode 下暂不支持并会明确提示。默认仍为 Claude Code。
-- **模型选择**：「AI 连接与本地数据」对话框在 opencode 模式下提供模型下拉（取自 `opencode models`），选择持久保存并用于后续生成；`MOMENTREAD_AI_MODEL` 可指定默认模型。
+- **设置界面切换 AI 运行时**：「AI 连接与本地数据」对话框新增运行时切换（Claude Code / opencode），不重启即时生效并持久保存；有正在进行的生成时拒绝切换并提示，切换前自动检测目标运行时的安装状态。
+- **opencode 作为可选 AI 运行时**：opencode 驱动讨论、概念展开、小结与每日总结；原著检索在 opencode 下暂不支持并会明确提示。默认仍为 Claude Code。
+- **模型选择**：「AI 连接与本地数据」对话框按当前运行时提供模型下拉（opencode 取自 `opencode models`），两个运行时的模型选择独立持久保存；`MOMENTREAD_AI_MODEL` 可指定默认模型。
+
+### 调整
+
+- `MOMENTREAD_AI` 环境变量降级为首次启动的默认运行时；在界面切换过运行时后，以界面选择为准。
 
 ## [0.2.1] - 2026-09-11
 
