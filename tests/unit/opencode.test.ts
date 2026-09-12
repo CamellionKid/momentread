@@ -1,9 +1,9 @@
 import {afterEach, describe, expect, it} from 'vitest';
-import {mkdtemp, writeFile, chmod, rm} from 'node:fs/promises';
+import {mkdtemp, writeFile, chmod, rm, realpath} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {createOpencodeAdapter, extractStructuredOutput, opencodeArguments, opencodeInput, parseModels} from '../../server/ai/opencode';
+import {createOpencodeAdapter, classifyOpencodeFailure, extractStructuredOutput, opencodeArguments, opencodeInput, parseModels} from '../../server/ai/opencode';
 import type {StartRun} from '../../shared/contracts/ports';
 import type {RunEvent} from '../../shared/contracts/index';
 
@@ -16,10 +16,12 @@ if(args[0]==='auth'){console.log('\\u25cf  test api\\n\\u2514 2 credentials');pr
 if(args[0]==='models'){console.log('opencode-go/deepseek-v4-flash\\nzijie/doubao-x\\n');process.exit(0)}
 const session=process.env.FIXTURE_SESSION||(args.includes('-s')?args[args.indexOf('-s')+1]:'ses_fixture123');
 const emit=value=>console.log(JSON.stringify({timestamp:Date.now(),sessionID:session,...value}));
+if(process.env.FIXTURE_ERROR){emit({type:'error',error:JSON.parse(process.env.FIXTURE_ERROR)});process.exit(Number(process.env.FIXTURE_EXIT??1))}
 emit({type:'step_start',part:{id:'p0',type:'step-start'}});
-emit({type:'text',part:{id:'p1',type:'text',text:process.env.FIXTURE_TEXT||'\\u5408\\u6210\\u56de\\u7b54'}});
+const text=process.env.FIXTURE_ECHO_ENV?'PWD='+process.env.PWD+' CWD='+process.cwd()+' DIR='+args[args.indexOf('--dir')+1]:(process.env.FIXTURE_TEXT||'\\u5408\\u6210\\u56de\\u7b54');
+emit({type:'text',part:{id:'p1',type:'text',text}});
 emit({type:'step_finish',part:{id:'p2',type:'step-finish',reason:'stop'}});
-process.exit(0);
+process.exit(Number(process.env.FIXTURE_EXIT??0));
 `;
 async function fixture() {
   const cwd = await mkdtemp(join(tmpdir(), 'momentread-opencode-unit-'));
@@ -70,7 +72,11 @@ describe('opencode adapter arguments and helpers', () => {
 
 describe('opencode adapter process lifecycle', () => {
   let cleanup: (() => Promise<void>) | undefined;
-  afterEach(async () => { delete process.env.FIXTURE_TEXT; delete process.env.FIXTURE_SESSION; await cleanup?.(); cleanup = undefined; });
+  afterEach(async () => {
+    delete process.env.FIXTURE_TEXT; delete process.env.FIXTURE_SESSION;
+    delete process.env.FIXTURE_ERROR; delete process.env.FIXTURE_EXIT; delete process.env.FIXTURE_ECHO_ENV;
+    await cleanup?.(); cleanup = undefined;
+  });
   const adapter = async () => {
     const f = await fixture();
     cleanup = f.cleanup;
@@ -134,5 +140,84 @@ describe('opencode adapter process lifecycle', () => {
   it('rejects permission answers because opencode has no permission protocol', async () => {
     const ai = await adapter();
     await expect(ai.answerPermission('run', 'req', 'allowRun')).rejects.toMatchObject({code: 'PERMISSION_EXPIRED'});
+  });
+  it('fails a run that emitted step_finish but exited non-zero', async () => {
+    process.env.FIXTURE_EXIT = '1';
+    const ai = await adapter();
+    const events = await collect((await ai.start(request())).events);
+    expect(events.at(-1)?.type).toBe('failed');
+    expect(events.at(-1)?.data.code).toBe('CLI_RUN_FAILED');
+    expect((await ai.probe()).invocationVerified).toBe(false);
+  });
+  it('marks the invocation verified only after a complete successful run', async () => {
+    const ai = await adapter();
+    expect((await ai.probe()).invocationVerified).toBe(false);
+    const events = await collect((await ai.start(request())).events);
+    expect(events.at(-1)?.type).toBe('completed');
+    expect((await ai.probe()).invocationVerified).toBe(true);
+  });
+  it('surfaces nested error events with classification and reference, not raw text', async () => {
+    process.env.FIXTURE_ERROR = JSON.stringify({name: 'UnknownError', data: {message: 'Request failed with status code 429 from https://gateway.internal/v1 with key sk-leaked123', statusCode: 429, requestID: 'req_test123'}});
+    const ai = await adapter();
+    const events = await collect((await ai.start(request())).events);
+    const last = events.at(-1);
+    expect(last?.type).toBe('failed');
+    expect(last?.data).toMatchObject({code: 'CLI_RATE_LIMIT', status: 429, errorName: 'UnknownError', requestId: 'req_test123'});
+    expect(String(last?.data.message)).not.toContain('429');
+    expect(String(last?.data.message)).not.toContain('sk-leaked123');
+    expect(String(last?.data.message)).not.toContain('https://');
+  });
+});
+
+describe('opencode run directory pinning', () => {
+  it('passes the adapter directory as PWD and --dir even when the parent PWD differs', async () => {
+    const spaced = await mkdtemp(join(tmpdir(), 'moment read spaced-'));
+    try {
+      const script = join(spaced, 'fixture.cjs');
+      const binary = join(spaced, 'opencode-test');
+      await writeFile(script, fixtureScript);
+      await writeFile(binary, `#!/bin/sh\nexec '${process.execPath}' '${script}' "$@"\n`);
+      await chmod(binary, 0o700);
+      const savedPwd = process.env.PWD;
+      process.env.PWD = '/deliberately/wrong';
+      process.env.FIXTURE_ECHO_ENV = '1';
+      try {
+        const ai = createOpencodeAdapter({binary, cwd: spaced, maxRunMs: 15000});
+        const events = await collect((await ai.start(request())).events);
+        expect(events.at(-1)?.type).toBe('completed');
+        const text = String(events.at(-1)?.data.text);
+        const expected = await realpath(spaced);
+        expect(text).toContain(`PWD=${spaced}`);
+        expect(text).toContain(`DIR=${spaced}`);
+        expect(text).toContain(`CWD=${expected}`);
+        expect(text).not.toContain('/deliberately/wrong');
+      } finally {
+        process.env.PWD = savedPwd;
+        delete process.env.FIXTURE_ECHO_ENV;
+      }
+    } finally {
+      await rm(spaced, {recursive: true, force: true});
+    }
+  });
+});
+
+describe('opencode error classification', () => {
+  it('reads the nested error.data message and extracts status and request id', () => {
+    const failure = classifyOpencodeFailure('UnknownError', 'Request failed with status code 429', 429, 'req_abc123');
+    expect(failure).toMatchObject({code: 'CLI_RATE_LIMIT', errorName: 'UnknownError', status: 429, requestId: 'req_abc123'});
+  });
+  it('classifies authentication failures from status or wording', () => {
+    expect(classifyOpencodeFailure('APIError', 'authentication failed: invalid api key', 401, undefined).code).toBe('CLI_AUTH_REQUIRED');
+    expect(classifyOpencodeFailure(undefined, 'Not logged in', undefined, undefined).code).toBe('CLI_AUTH_REQUIRED');
+  });
+  it('classifies missing models and broken agent configuration', () => {
+    expect(classifyOpencodeFailure(undefined, 'model "x/y" not found', 404, undefined).code).toBe('CLI_MODEL_UNAVAILABLE');
+    expect(classifyOpencodeFailure(undefined, 'agent momentread not found in config', undefined, undefined).code).toBe('CLI_CONFIG_INVALID');
+  });
+  it('keeps unknown failures generic and never leaks details into the message', () => {
+    const failure = classifyOpencodeFailure('Weird', 'sk-ant-secret123 at /Users/darren/private/path', undefined, undefined);
+    expect(failure.code).toBe('CLI_RUN_FAILED');
+    expect(failure.message).not.toContain('sk-');
+    expect(failure.message).not.toContain('/Users');
   });
 });

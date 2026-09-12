@@ -17,6 +17,7 @@
     "test:integration": "vitest run tests/integration",
     "test:contract": "vitest run tests/contract",
     "test:live": "tsx scripts/claude-probe.ts --live",
+    "test:live:opencode": "tsx scripts/opencode-probe.ts --live",
     "contracts": "tsx scripts/openapi.ts"
   },
   "dependencies": {

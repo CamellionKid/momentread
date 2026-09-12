@@ -163,4 +163,110 @@ describe('runtime provider and model selection',()=>{
     expect(rejected.status).toBe(400);
     expect((await rejected.json()).error.code).toBe('MODEL_SELECTION_UNSUPPORTED');
   });
+
+  it('keeps the current configuration when the target model is invalid',async()=>{
+    const claude=new InstalledClaudeAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const rejected=await h.request('/api/runtime','PATCH',{provider:'opencode',model:'no/such-model'});
+    expect(rejected.status).toBe(400);
+    expect((await rejected.json()).error.code).toBe('VALIDATION_ERROR');
+    const info=await (await h.request('/api/runtime')).json();
+    expect(info.provider).toBe('claude');
+    expect(h.store.getIdempotent('ai.provider')).toBeUndefined();
+  });
+
+  it('serializes switching with run starts so a run keeps its pinned adapter',async()=>{
+    const claude=new InstalledClaudeAdapter();
+    class SlowProbe extends SwitchableOpencodeAdapter{async probe(){await new Promise(resolve=>setTimeout(resolve,80));return super.probe();}}
+    const opencode=new SlowProbe();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    const {discussionId}=await analysis.json();
+    await waitFor(()=>h.state(book.id),state=>state.runs.some(run=>run.purpose==='discussion'&&run.status==='completed'),'first answer complete');
+    claude.scripts.push(()=>{});
+    const switching=h.request('/api/runtime','PATCH',{provider:'opencode'});
+    const follow=await h.request(`/api/discussions/${discussionId}/messages`,'POST',{text:'并发追问'});
+    expect(follow.status).toBe(202);
+    const switched=await switching;
+    expect(switched.status).toBe(409);
+    expect((await switched.json()).error.code).toBe('RUNTIME_BUSY');
+    expect(claude.starts.at(-1)?.discussionId).toBe(discussionId);
+    expect(opencode.starts).toHaveLength(0);
+    expect((await (await h.request('/api/runtime')).json()).provider).toBe('claude');
+  });
+});
+
+describe('session runtime attribution',()=>{
+  const answered=(h:Harness,bookId:string,count:number,label:string)=>waitFor(()=>h.state(bookId),state=>state.runs.filter(run=>run.purpose==='discussion'&&run.status==='completed').length===count,label);
+
+  it('resumes only same-runtime sessions with full coverage and starts fresh otherwise',async()=>{
+    const claude=new InstalledClaudeAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    const {discussionId}=await analysis.json();
+    await answered(h,book.id,1,'first claude answer');
+    await h.request(`/api/discussions/${discussionId}/messages`,'POST',{text:'追问一'});
+    await answered(h,book.id,2,'claude follow-up');
+    expect(claude.starts.at(-1)?.session.mode).toBe('resume');
+    const resumedSession=claude.starts.at(-1)?.session;
+    const claudeSessionId=resumedSession?.mode==='resume'?resumedSession.cliSessionId:undefined;
+    await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    await h.request(`/api/discussions/${discussionId}/messages`,'POST',{text:'追问二'});
+    await answered(h,book.id,3,'opencode follow-up');
+    expect(opencode.starts).toHaveLength(1);
+    expect(opencode.starts[0].session.mode).toBe('new');
+    await h.request('/api/runtime','PATCH',{provider:'claude'});
+    await h.request(`/api/discussions/${discussionId}/messages`,'POST',{text:'追问三'});
+    await answered(h,book.id,4,'back to claude');
+    expect(claude.starts.at(-1)?.session.mode).toBe('new');
+    if(claudeSessionId)expect(claude.starts.at(-1)?.session).not.toMatchObject({mode:'resume',cliSessionId:claudeSessionId});
+    const sessions=h.store.list('sessions',book.id);
+    expect(sessions.length).toBeGreaterThan(0);
+    expect(sessions.every(s=>s.runtime==='claude'||s.runtime==='opencode')).toBe(true);
+    expect(sessions.every(s=>typeof s.coverage==='number')).toBe(true);
+  });
+
+  it('keeps sibling and nested branch sessions apart',async()=>{
+    const claude=new InstalledClaudeAdapter();
+    const h=await makeHarness(claude);opened.push(h);
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    const {discussionId}=await analysis.json();
+    await answered(h,book.id,1,'root answer');
+    const root=(await h.state(book.id)).messages.find(m=>m.discussionId===discussionId&&m.role==='assistant')!;
+    const branch=async(parentId:string,messageId:string,title:string)=>{
+      const response=await h.request('/api/branches','POST',{parentId,title,origin:{messageId,start:0,end:4,exact:'合成概念'}});
+      expect(response.status).toBe(202);
+      return (await response.json()).discussionId as string;
+    };
+    const first=await branch(discussionId,root.id,'分支一');
+    await waitFor(()=>h.state(book.id),state=>state.runs.some(run=>run.discussionId===first&&run.status==='completed'),'branch one answer');
+    const second=await branch(discussionId,root.id,'分支二');
+    await waitFor(()=>h.state(book.id),state=>state.runs.some(run=>run.discussionId===second&&run.status==='completed'),'branch two answer');
+    await h.request(`/api/discussions/${first}/messages`,'POST',{text:'分支内追问'});
+    await waitFor(()=>h.state(book.id),state=>state.runs.filter(run=>run.discussionId===first&&run.status==='completed').length===2,'branch one follow-up');
+    expect(claude.starts.filter(s=>s.discussionId===first).at(-1)?.session.mode).toBe('resume');
+    expect(claude.starts.filter(s=>s.discussionId===second).every(s=>s.session.mode==='new')).toBe(true);
+    const nestedAssistant=(await h.state(book.id)).messages.find(m=>m.discussionId===first&&m.role==='assistant')!;
+    const deep=await branch(first,nestedAssistant.id,'深层分支');
+    await waitFor(()=>h.state(book.id),state=>state.runs.some(run=>run.discussionId===deep&&run.status==='completed'),'deep branch answer');
+    expect(claude.starts.filter(s=>s.discussionId===deep).every(s=>s.session.mode==='new')).toBe(true);
+  });
+
+  it('never resumes sessions that predate runtime attribution but keeps old data readable',async()=>{
+    const claude=new InstalledClaudeAdapter();
+    const h=await makeHarness(claude);opened.push(h);
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    const {discussionId}=await analysis.json();
+    await answered(h,book.id,1,'first answer');
+    for(const s of h.store.list('sessions',book.id))h.store.put('sessions',{...s,runtime:undefined,coverage:undefined});
+    await h.request(`/api/discussions/${discussionId}/messages`,'POST',{text:'升级后追问'});
+    await answered(h,book.id,2,'legacy follow-up');
+    expect(claude.starts.at(-1)?.session.mode).toBe('new');
+    const state=await h.state(book.id);
+    expect(state.messages.filter(m=>m.discussionId===discussionId).length).toBeGreaterThanOrEqual(3);
+  });
 });

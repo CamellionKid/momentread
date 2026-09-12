@@ -19,8 +19,9 @@ export class RunManager {
   // A session may be resumed only by its owning runtime and only when no
   // completed exchange happened elsewhere since (at most the triggering user
   // message is new). Legacy rows without runtime/coverage never qualify.
+  const messages=this.store.list('messages',context.bookId).filter(m=>m.discussionId===context.discussionId).length;
   return this.store.list('sessions',context.bookId)
-   .filter(s=>s.discussionId===context.discussionId&&s.reusable&&s.runtime===provider&&s.coverage!==undefined&&s.coverage+1>=context.messageIds.length)
+   .filter(s=>s.discussionId===context.discussionId&&s.reusable&&s.runtime===provider&&s.coverage!==undefined&&s.coverage+1>=messages)
    .sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
  }
  async start(context:ContextSnapshot,purpose:RunPurpose,hooks:Hooks={},outputSchema?:Record<string,unknown>):Promise<Run>{
