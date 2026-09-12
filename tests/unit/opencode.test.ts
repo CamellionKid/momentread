@@ -38,11 +38,12 @@ async function collect(events: AsyncIterable<RunEvent>) {
 
 describe('opencode adapter arguments and helpers', () => {
   it('runs headless with the isolated agent, session resume, and model passthrough', () => {
-    const fresh = opencodeArguments(request());
+    const fresh = opencodeArguments(request(), undefined, '/tmp/run dir');
     expect(fresh.slice(0, 4)).toEqual(['run', '--format', 'json', '--pure']);
     expect(fresh).toContain('momentread');
     expect(fresh).not.toContain('-s');
-    const resumed = opencodeArguments(request({session: {mode: 'resume', cliSessionId: 'ses_abc'}}), 'opencode-go/deepseek-v4-flash');
+    expect(fresh[fresh.indexOf('--dir') + 1]).toBe('/tmp/run dir');
+    const resumed = opencodeArguments(request({session: {mode: 'resume', cliSessionId: 'ses_abc'}}), 'opencode-go/deepseek-v4-flash', '/tmp/run dir');
     expect(resumed).toContain('-s');
     expect(resumed[resumed.indexOf('-s') + 1]).toBe('ses_abc');
     expect(resumed[resumed.indexOf('-m') + 1]).toBe('opencode-go/deepseek-v4-flash');
