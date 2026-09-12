@@ -18,6 +18,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > release-notes.md
+          [ -s release-notes.md ] || echo "本次发布的变更请见 CHANGELOG.md。" > release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           generate_release_notes: true
