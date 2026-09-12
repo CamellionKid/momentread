@@ -9,6 +9,13 @@ afterEach(async()=>{for(const value of opened.splice(0))await value.dispose();})
 class ModelAdapter extends ControlledAdapter {
   async models(){return ['opencode-go/deepseek-v4-flash','zijie/doubao-x'];}
 }
+class InstalledClaudeAdapter extends ControlledAdapter {
+  async probe(){return {installed:true,version:'2.0.0-test',authReported:true,invocationVerified:true,message:'Synthetic Claude adapter'};}
+}
+class SwitchableOpencodeAdapter extends ControlledAdapter {
+  async probe(){return {installed:true,version:'1.0.0-test',authReported:true,invocationVerified:true,message:'Synthetic opencode adapter'};}
+  async models(){return ['opencode-go/deepseek-v4-flash','zijie/doubao-x'];}
+}
 
 describe('runtime provider and model selection',()=>{
   it('reports the provider with an empty model list for adapters without model support',async()=>{
@@ -78,5 +85,82 @@ describe('runtime provider and model selection',()=>{
     expect(blocked.status).toBe(400);
     expect((await blocked.json()).error.code).toBe('MATCHING_UNSUPPORTED');
     expect((await h.state(book.id)).runs).toHaveLength(1);
+  });
+
+  it('switches the AI provider at runtime and isolates its model preference',async()=>{
+    const claude=new InstalledClaudeAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const switched=await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    expect(switched.status).toBe(200);
+    const body=await switched.json();
+    expect(body.provider).toBe('opencode');
+    expect(body.model).toBeNull();
+    expect(body.models).toEqual(['opencode-go/deepseek-v4-flash','zijie/doubao-x']);
+    const back=await h.request('/api/runtime','PATCH',{provider:'claude'});
+    expect(back.status).toBe(200);
+    expect((await back.json()).provider).toBe('claude');
+  });
+
+  it('routes new runs to the adapter selected at runtime',async()=>{
+    const claude=new ControlledAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    expect(analysis.status).toBe(202);
+    await waitFor(()=>h.state(book.id),state=>state.runs.length===1&&state.runs[0].status==='completed','opencode discussion run complete');
+    expect(opencode.starts).toHaveLength(1);
+    expect(claude.starts).toHaveLength(0);
+  });
+
+  it('rejects provider switching while a run is active',async()=>{
+    const claude=new ControlledAdapter();const opencode=new SwitchableOpencodeAdapter();
+    claude.scripts.push(()=>{});
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const book=await importSynthetic(h);
+    const analysis=await h.request('/api/analyses','POST',{source:reference(book),question:'合成问题'});
+    expect(analysis.status).toBe(202);
+    await waitFor(()=>h.state(book.id),state=>state.runs.some(run=>run.status==='running'),'matching run active');
+    const switched=await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    expect(switched.status).toBe(409);
+    expect((await switched.json()).error.code).toBe('RUNTIME_BUSY');
+  });
+
+  it('rejects switching to a provider without an adapter',async()=>{
+    const h=await harness();
+    const response=await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it('rejects switching to a runtime that is not installed',async()=>{
+    const claude=new ControlledAdapter();const opencode=new ControlledAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const response=await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('PROVIDER_NOT_INSTALLED');
+  });
+
+  it('persists the selected provider across restart, ahead of the configured default',async()=>{
+    const claude=new ControlledAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    await h.request('/api/runtime','PATCH',{provider:'opencode'});
+    const dir=h.dir;await h.dispose(false);opened.splice(opened.indexOf(h),1);
+    const reopened=await makeHarness(claude,dir,'claude',p=>p==='opencode'?opencode:claude);opened.push(reopened);
+    const body=await (await reopened.request('/api/runtime')).json();
+    expect(body.provider).toBe('opencode');
+  });
+
+  it('applies provider and model in one request, validating against the new runtime',async()=>{
+    const claude=new InstalledClaudeAdapter();const opencode=new SwitchableOpencodeAdapter();
+    const h=await makeHarness(claude,undefined,'claude',p=>p==='opencode'?opencode:claude);opened.push(h);
+    const ok=await h.request('/api/runtime','PATCH',{provider:'opencode',model:'zijie/doubao-x'});
+    expect(ok.status).toBe(200);
+    const body=await ok.json();
+    expect(body.provider).toBe('opencode');
+    expect(body.model).toBe('zijie/doubao-x');
+    const rejected=await h.request('/api/runtime','PATCH',{provider:'claude',model:'zijie/doubao-x'});
+    expect(rejected.status).toBe(400);
+    expect((await rejected.json()).error.code).toBe('MODEL_SELECTION_UNSUPPORTED');
   });
 });
