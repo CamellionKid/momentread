@@ -9,11 +9,22 @@ import type {Store,BookLibrary,ClaudeAdapter,LearningService,MatchingService} fr
 import {RunManager} from './runs';
 import {buildReport,renderReport,dayAt} from './exports/index';
 
-type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number;ai?:{provider:'claude'|'opencode';model?:string}};
+type Provider='claude'|'opencode';
+type Services={store:Store;library:BookLibrary;adapter:ClaudeAdapter;learning:LearningService;matching:MatchingService;port?:number;ai?:{provider:Provider;model?:string};adapterFactory?:(provider:Provider)=>ClaudeAdapter};
 export function createApp(services:Services){
- const {store,library,adapter,learning,matching}=services;const runs=new RunManager(store,adapter,services.ai?.provider);const app=new Hono();
+ const {store,library,adapter,learning,matching}=services;
+ const initialProvider=services.ai?.provider??'claude';
+ const adapters=new Map<Provider,ClaudeAdapter>([[initialProvider,adapter]]);
+ const adapterFor=(provider:Provider):ClaudeAdapter|undefined=>{
+  const cached=adapters.get(provider);if(cached)return cached;
+  const created=services.adapterFactory?.(provider);if(created)adapters.set(provider,created);
+  return created;
+ };
+ const storedProvider=store.getIdempotent('ai.provider');
+ let currentProvider:Provider=(storedProvider==='claude'||storedProvider==='opencode')&&adapterFor(storedProvider)?storedProvider:initialProvider;
+ const runs=new RunManager(store,()=>({adapter:adapterFor(currentProvider)!,provider:currentProvider}));const app=new Hono();
  const matchingUnsupported=()=>new AppError('MATCHING_UNSUPPORTED','当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。',400);
- const supportsMatching=()=>services.ai?.provider!=='opencode';
+ const supportsMatching=()=>currentProvider!=='opencode';
  // Download capabilities belong to this service instance, never to restored data.
  const backupDownloads=new Map<string,string>();
  const required=<T>(value:T|undefined,message='找不到记录。'):T=>{if(value===undefined)throw new AppError('NOT_FOUND',message,404);return value};
@@ -32,20 +43,31 @@ export function createApp(services:Services){
   const context=matching.buildInput(id);
   return runs.start(context,'matching',{onComplete:async(event)=>{const result=event.data.structuredOutput??event.data.text;await matching.complete(id,{result,toolResults:event.data.toolResults??[]})},onTerminal:async(run)=>{if(continueAnswer&&run.status!=='cancelled'){try{await answer(id)}catch(error){const d=discussion(id);store.put('runs',{id:randomUUID(),bookId:d.bookId,discussionId:d.id,purpose:'discussion',status:'failed',contextSnapshotId:context.id,sessionId:null,sessionReusable:false,partialText:'',result:null,error:'解析未能启动，请重新发送问题。',createdAt:now(),updatedAt:now()})}}}},{type:'object',properties:{candidates:{type:'array',items:{type:'object',properties:{url:{type:'string'},title:{type:'string'},language:{type:'string'},version:{type:'string'},quote:{type:'string'},locator:{type:'string'},reason:{type:'string'}},required:['url','title','language','version','quote','locator','reason'],additionalProperties:false}}},required:['candidates'],additionalProperties:false});
  }
- const provider=services.ai?.provider??'claude';
- const modelKey=`ai.model.${provider}`;
+ const modelKey=()=>`ai.model.${currentProvider}`;
  const legacyModel=store.getIdempotent('ai.model');
- if(typeof legacyModel==='string'&&legacyModel.includes('/')&&provider==='opencode'&&!store.getIdempotent(modelKey))store.setPreference(modelKey,legacyModel);
- const runtimeInfo=async()=>({...(await adapter.probe()),provider,models:await adapter.models?.()??[],model:(store.getIdempotent(modelKey) as string|undefined)??services.ai?.model??null});
- const RuntimePatchSchema=z.object({model:z.string().min(1).max(100)});
+ if(typeof legacyModel==='string'&&legacyModel.includes('/')&&currentProvider==='opencode'&&!store.getIdempotent(modelKey()))store.setPreference(modelKey(),legacyModel);
+ const runtimeInfo=async()=>{const current=adapterFor(currentProvider)!;return {...(await current.probe()),provider:currentProvider,models:await current.models?.()??[],model:(store.getIdempotent(modelKey()) as string|undefined)??services.ai?.model??null}};
+ const RuntimePatchSchema=z.object({provider:z.enum(['claude','opencode']).optional(),model:z.string().min(1).max(100).optional()}).refine(value=>value.provider!==undefined||value.model!==undefined);
  app.get('/api/health',c=>c.json({status:'ok',version:'0.1.0'}));
  app.get('/api/runtime',async c=>c.json(await runtimeInfo()));
  app.patch('/api/runtime',async c=>{
-  const {model}=RuntimePatchSchema.parse(await c.req.json());
-  if(!adapter.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
-  const models=await adapter.models();
-  if(!models.includes(model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
-  store.setPreference(modelKey,model);
+  const patch=RuntimePatchSchema.parse(await c.req.json());
+  if(patch.provider!==undefined&&patch.provider!==currentProvider){
+   if(runs.activeCount()>0)throw new AppError('RUNTIME_BUSY','当前有正在进行的生成，请等待结束后再切换 AI 运行时。',409,true);
+   const next=adapterFor(patch.provider);
+   if(!next)throw new AppError('PROVIDER_UNAVAILABLE','该 AI 运行时在当前部署中不可用。',400);
+   const probe=await next.probe();
+   if(!probe.installed)throw new AppError('PROVIDER_NOT_INSTALLED',`未检测到 ${patch.provider==='opencode'?'opencode':'Claude Code'}，请先安装并完成登录后再切换。`,400);
+   currentProvider=patch.provider;
+   store.setPreference('ai.provider',currentProvider);
+  }
+  if(patch.model!==undefined){
+   const current=adapterFor(currentProvider)!;
+   if(!current.models)throw new AppError('MODEL_SELECTION_UNSUPPORTED','当前 AI 运行时不支持模型选择。',400);
+   const models=await current.models();
+   if(!models.includes(patch.model))throw new AppError('VALIDATION_ERROR','所选模型不在当前运行时的可用列表中。',400);
+   store.setPreference(modelKey(),patch.model);
+  }
   return c.json(await runtimeInfo());
  });
  app.get('/api/books',c=>c.json(store.list('books')));app.post('/api/books',async c=>{const f=await fileInput(c);return c.json(await library.importBook(f.bytes,f.filename),201)});

@@ -3,9 +3,10 @@ import {AppError,now,type ContextSnapshot,type Run,type RunEvent,type RunPurpose
 import type {ClaudeAdapter,Store} from '../shared/contracts/ports';
 
 type Hooks={reportTarget?:{date:string;timezone:string};onComplete?:(event:RunEvent,run:Run)=>Promise<void>|void;result?:(event:RunEvent,run:Run)=>unknown;onTerminal?:(run:Run)=>Promise<void>|void};
+export type RuntimeResolver=()=>{adapter:ClaudeAdapter;provider:'claude'|'opencode'};
 export class RunManager {
  private active=new Map<string,{discussionId:string;purpose:RunPurpose}>();
- constructor(private store:Store,private adapter:ClaudeAdapter,private provider:'claude'|'opencode'='claude'){
+ constructor(private store:Store,private resolve:RuntimeResolver){
   store.transaction(()=>{for(const run of store.list('runs'))if(['queued','running','permission'].includes(run.status)){
    store.put('runs',{...run,status:'interrupted',sessionReusable:false,error:'服务已重启；这次运行中断，可保留内容后重新发起。',updatedAt:now()});
    for(const session of store.list('sessions',run.bookId).filter(s=>s.discussionId===run.discussionId))store.put('sessions',{...session,reusable:false});
@@ -49,14 +50,16 @@ export class RunManager {
    if(['completed','failed','cancelled'].includes(next.status)){terminal=true;this.active.delete(run.id);await hooks.onTerminal?.(next);}
   };
   try{
-   const handle=await this.adapter.start({runId:run.id,bookId:run.bookId,discussionId:run.discussionId,purpose:run.purpose,contextSnapshotId:context.id,input:context.input,session:sessionId?{mode:'resume',cliSessionId:sessionId}:{mode:'new'},outputSchema,model:this.store.getIdempotent(`ai.model.${this.provider}`) as string|undefined});
+   const {adapter,provider}=this.resolve();
+   const handle=await adapter.start({runId:run.id,bookId:run.bookId,discussionId:run.discussionId,purpose:run.purpose,contextSnapshotId:context.id,input:context.input,session:sessionId?{mode:'resume',cliSessionId:sessionId}:{mode:'new'},outputSchema,model:this.store.getIdempotent(`ai.model.${provider}`) as string|undefined});
    for await(const event of handle.events)await record(event);
    if(!terminal)throw new AppError('INCOMPLETE_RUN','运行结束但缺少完整结果。',502,true);
   }catch(error){
    if(!terminal){const e=error instanceof AppError?error:new AppError('RUN_FAILED','运行未完成，请查看连接状态或重试。',502,true);await record({runId:run.id,bookId:run.bookId,discussionId:run.discussionId,seq:0,type:'failed',data:{code:e.code,message:e.message,sessionReusable:false},createdAt:now()});}
   }finally{this.active.delete(run.id)}
  }
- async cancel(runId:string){const run=this.store.get('runs',runId);if(!run)throw new AppError('NOT_FOUND','找不到运行。',404);if(!this.active.has(runId))return;await this.adapter.cancel(runId);}
- async permission(runId:string,requestId:string,decision:'allowRun'|'denyRun'){if(!this.active.has(runId))throw new AppError('PERMISSION_EXPIRED','该权限请求已失效。',409);await this.adapter.answerPermission(runId,requestId,decision);}
- async shutdown(){await Promise.allSettled([...this.active.keys()].map(id=>this.adapter.cancel(id)))}
+ async cancel(runId:string){const run=this.store.get('runs',runId);if(!run)throw new AppError('NOT_FOUND','找不到运行。',404);if(!this.active.has(runId))return;await this.resolve().adapter.cancel(runId);}
+ async permission(runId:string,requestId:string,decision:'allowRun'|'denyRun'){if(!this.active.has(runId))throw new AppError('PERMISSION_EXPIRED','该权限请求已失效。',409);await this.resolve().adapter.answerPermission(runId,requestId,decision);}
+ activeCount(){return this.active.size}
+ async shutdown(){const {adapter}=this.resolve();await Promise.allSettled([...this.active.keys()].map(id=>adapter.cancel(id)))}
 }
