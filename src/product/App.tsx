@@ -625,13 +625,17 @@ export default function App() {
       {modal === "runtime" && (
         <RuntimePanel
           probe={probe}
+          busy={busy}
           onClose={() => setModal(null)}
           onProbe={() =>
             void runAction(async () => setProbe(await api.runtime()))
           }
           onBackup={() => void runAction(backup)}
           onModel={(model) =>
-            void runAction(async () => setProbe(await api.setModel(model)))
+            void runAction(async () => setProbe(await api.updateRuntime({ model })))
+          }
+          onProvider={(provider) =>
+            void runAction(async () => setProbe(await api.updateRuntime({ provider })))
           }
         />
       )}

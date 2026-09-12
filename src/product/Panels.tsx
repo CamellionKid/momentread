@@ -394,20 +394,51 @@ export function ConceptsPanel({
 }
 export function RuntimePanel({
   probe,
+  busy = false,
   onClose,
   onProbe,
   onBackup,
   onModel,
+  onProvider,
 }: {
   probe: RuntimeInfo | null;
+  busy?: boolean;
   onClose: () => void;
   onProbe: () => void;
   onBackup: () => void;
   onModel: (model: string) => void;
+  onProvider: (provider: "claude" | "opencode") => void;
 }) {
   const providerName = probe?.provider === "opencode" ? "opencode" : "Claude Code";
   return (
     <Dialog title="AI 连接与本地数据" onClose={onClose}>
+      <label className="setting-row">AI 运行时</label>
+      <div className="flow-options" role="group" aria-label="AI 运行时">
+        <button
+          type="button"
+          className={probe?.provider !== "opencode" ? "active" : ""}
+          aria-pressed={probe?.provider !== "opencode"}
+          disabled={busy || !probe}
+          onClick={() => onProvider("claude")}
+        >
+          Claude Code
+        </button>
+        <button
+          type="button"
+          className={probe?.provider === "opencode" ? "active" : ""}
+          aria-pressed={probe?.provider === "opencode"}
+          disabled={busy || !probe}
+          onClick={() => onProvider("opencode")}
+        >
+          opencode
+        </button>
+      </div>
+      <p className="quiet-note">
+        切换后立即生效，已保存的讨论与模型偏好互不影响。
+        {probe?.provider === "opencode"
+          ? "opencode 运行时不支持原著检索，切回 Claude Code 即可恢复。"
+          : ""}
+      </p>
       <div className="setting-row">
         <div>
           <strong>{providerName}</strong>
