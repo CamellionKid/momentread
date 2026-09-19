@@ -1,5 +1,5 @@
-import {afterEach, describe, expect, it} from 'vitest';
-import {mkdtemp, writeFile, chmod, rm, realpath} from 'node:fs/promises';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {mkdtemp, writeFile, chmod, rm, realpath, mkdir, symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -198,6 +198,66 @@ describe('opencode run directory pinning', () => {
     } finally {
       await rm(spaced, {recursive: true, force: true});
     }
+  });
+});
+
+describe('opencode installation selection', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function install(directory: string, script: string) {
+    await mkdir(directory, {recursive: true});
+    const binary = join(directory, 'opencode');
+    await writeFile(binary, script, {mode: 0o700});
+    return binary;
+  }
+
+  it('does not report a silent successful launcher as installed', async () => {
+    const f = await fixture();
+    try {
+      const binary = await install(join(f.cwd, 'broken'), '#!/bin/sh\nexit 0\n');
+      const ai = createOpencodeAdapter({binary, cwd: f.cwd});
+      expect(await ai.probe()).toMatchObject({installed: false, version: null, authReported: false});
+      expect(await ai.models?.()).toEqual([]);
+      await expect(ai.start(request())).rejects.toMatchObject({code: 'CLI_NOT_INSTALLED'});
+    } finally { await f.cleanup(); }
+  });
+
+  it('prefers the standalone installation and pins it across PATH changes', async () => {
+    const f = await fixture();
+    try {
+      const preferred = join(f.cwd, '.opencode/bin');
+      await mkdir(preferred, {recursive: true});
+      await symlink(f.binary, join(preferred, 'opencode'));
+      const other = join(f.cwd, 'other');
+      await install(other, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.0; fi\nexit 0\n');
+      vi.stubEnv('HOME', f.cwd);
+      vi.stubEnv('PATH', other);
+      const ai = createOpencodeAdapter({cwd: f.cwd});
+      expect(await ai.probe()).toMatchObject({installed: true, version: '1.18.25-test'});
+      vi.stubEnv('HOME', join(f.cwd, 'missing-home'));
+      vi.stubEnv('PATH', other);
+      expect(await ai.models?.()).toContain('opencode-go/deepseek-v4-flash');
+      const events = await collect((await ai.start(request())).events);
+      expect(events.at(-1)?.type).toBe('completed');
+    } finally { await f.cleanup(); }
+  });
+
+  it('skips broken candidates and uses a working CLI later in PATH', async () => {
+    const f = await fixture();
+    try {
+      await install(join(f.cwd, '.opencode/bin'), '#!/bin/sh\nexit 1\n');
+      const bad = join(f.cwd, 'bad');
+      await install(bad, '#!/bin/sh\nexit 0\n');
+      const good = join(f.cwd, 'good');
+      await mkdir(good);
+      await symlink(f.binary, join(good, 'opencode'));
+      vi.stubEnv('HOME', f.cwd);
+      vi.stubEnv('PATH', `${bad}:${good}`);
+      const ai = createOpencodeAdapter({cwd: f.cwd});
+      expect(await ai.probe()).toMatchObject({installed: true, version: '1.18.25-test'});
+      const events = await collect((await ai.start(request())).events);
+      expect(events.at(-1)?.type).toBe('completed');
+    } finally { await f.cleanup(); }
   });
 });
 

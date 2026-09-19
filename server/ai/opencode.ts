@@ -69,11 +69,19 @@ function environment(cwd?: string) {
   env.PATH = [...new Set([...(env.PATH || '').split(delimiter), join(homedir(), '.opencode/bin'), join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'])].join(delimiter);
   return env;
 }
-async function findBinary(explicit?: string) {
-  if (explicit) return explicit;
-  for (const dir of (environment().PATH || '').split(delimiter)) {
-    const candidate = join(dir, 'opencode');
-    try { await access(candidate, constants.X_OK); return candidate; } catch { /* next known binary */ }
+async function findBinary(cwd: string, explicit?: string) {
+  await mkdir(cwd, {recursive: true, mode: 0o700});
+  const candidates = explicit ? [explicit] : [
+    join(homedir(), '.opencode/bin/opencode'),
+    ...(environment().PATH || '').split(delimiter).filter(Boolean).map(dir => join(dir, 'opencode')),
+  ];
+  for (const candidate of new Set(candidates)) {
+    try {
+      await access(candidate, constants.X_OK);
+      const version = (await exec(candidate, ['--version'], cwd)).trim();
+      // Some package launchers return exit code zero after their child was killed.
+      if (/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version) && version.length <= 100) return {path: resolve(candidate), version};
+    } catch { /* Try the next installation; an explicit override never falls back. */ }
   }
   return null;
 }
@@ -112,6 +120,14 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
   const runs = new Map<string, Active>();
   let invocationVerified = false;
   let modelsCache: string[] | undefined;
+  let binarySelection: ReturnType<typeof findBinary> | undefined;
+  const selectedBinary = () => {
+    if (!binarySelection) binarySelection = findBinary(cwd, options.binary).then(result => {
+      if (!result) binarySelection = undefined;
+      return result;
+    }, error => { binarySelection = undefined; throw error; });
+    return binarySelection;
+  };
   const log = (value: string) => options.logger?.(redactDiagnostic(value));
   const emit = (state: Active, type: RunEvent['type'], data: Record<string, unknown>) => {
     if (!state.closed) state.queue.push({runId: state.request.runId, bookId: state.request.bookId, discussionId: state.request.discussionId, seq: ++state.seq, type, data, createdAt: now()});
@@ -179,18 +195,16 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
 
   return {
     async probe(): Promise<RuntimeProbe> {
-      const binary = await findBinary(options.binary);
-      if (!binary) return {installed: false, version: null, authReported: false, invocationVerified: false, provider: 'opencode', message: '未找到 opencode，请按 README 安装并登录。'};
-      await mkdir(cwd, {recursive: true, mode: 0o700});
-      let version: string;
-      try { version = (await exec(binary, ['--version'], cwd)).trim().slice(0, 100); } catch { return {installed: false, version: null, authReported: false, invocationVerified, provider: 'opencode', message: 'opencode 无法启动，请检查安装。'}; }
+      const installation = await selectedBinary();
+      if (!installation) return {installed: false, version: null, authReported: false, invocationVerified: false, provider: 'opencode', message: '未找到可正常启动的 opencode，请按 README 检查安装。'};
+      const {path: binary, version} = installation;
       let authReported = false;
       try { authReported = /[1-9]\d*\s+credential/.test(await exec(binary, ['auth', 'list'], cwd)); } catch { /* auth list does not prove an invocation */ }
       return {installed: true, version, authReported, invocationVerified, provider: 'opencode', message: invocationVerified ? 'opencode 已完成实际调用。' : authReported ? 'opencode 已登录；尚未完成实际调用验证。' : 'opencode 已安装，请登录后发送一个问题验证。'};
     },
     async models(): Promise<string[]> {
       if (modelsCache) return modelsCache;
-      const binary = await findBinary(options.binary);
+      const binary = (await selectedBinary())?.path;
       if (!binary) return [];
       await mkdir(cwd, {recursive: true, mode: 0o700});
       try { modelsCache = parseModels(await exec(binary, ['models'], cwd)); } catch { modelsCache = []; }
@@ -201,8 +215,8 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
       if ([...runs.values()].some(state => state.request.discussionId === request.discussionId && state.request.bookId === request.bookId)) throw new AppError('RUN_CONFLICT', '当前讨论已有生成任务。', 409);
       if (request.purpose === 'matching') throw new AppError('MATCHING_UNSUPPORTED', '当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。', 400);
       if (request.session.mode === 'resume' && !sessionIdPattern.test(request.session.cliSessionId)) throw new AppError('CLI_SESSION_INVALID', '会话标识无效，不能接续。');
-      const binary = await findBinary(options.binary);
-      if (!binary) throw new AppError('CLI_NOT_INSTALLED', '未找到 opencode，请按 README 安装并登录。', 503);
+      const binary = (await selectedBinary())?.path;
+      if (!binary) throw new AppError('CLI_NOT_INSTALLED', '未找到可正常启动的 opencode，请按 README 检查安装。', 503);
       await ensureConfig();
       const model = request.model ?? options.model;
       const args = opencodeArguments(request, model, cwd);
