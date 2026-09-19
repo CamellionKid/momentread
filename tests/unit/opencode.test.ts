@@ -138,6 +138,13 @@ describe('opencode adapter process lifecycle', () => {
     expect(probe).toMatchObject({installed: true, version: '1.18.25-test', authReported: true, provider: 'opencode'});
     expect(await ai.models?.()).toEqual(['opencode-go/deepseek-v4-flash', 'zijie/doubao-x']);
   });
+  it.each(['', ' \n\t'])('does not report an empty version as a working installation (%j)', async version => {
+    const f = await fixture();
+    cleanup = f.cleanup;
+    await writeFile(join(f.cwd, 'fixture.cjs'), `process.stdout.write(${JSON.stringify(version)});`);
+    const ai = createOpencodeAdapter({binary: f.binary, cwd: f.cwd});
+    expect(await ai.probe()).toMatchObject({installed: false, version: null, authReported: false, invocationVerified: false, provider: 'opencode', message: 'opencode 无法启动，请检查安装。'});
+  });
   it('cancels a running process', async () => {
     const ai = await adapter();
     const handle = await ai.start(request());

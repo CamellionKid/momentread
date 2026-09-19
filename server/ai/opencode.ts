@@ -192,7 +192,12 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
       if (!binary) return {installed: false, version: null, authReported: false, invocationVerified: false, provider: 'opencode', message: '未找到 opencode，请按 README 安装并登录。'};
       await mkdir(cwd, {recursive: true, mode: 0o700});
       let version: string;
-      try { version = (await exec(binary, ['--version'], cwd)).trim().slice(0, 100); } catch { return {installed: false, version: null, authReported: false, invocationVerified, provider: 'opencode', message: 'opencode 无法启动，请检查安装。'}; }
+      try {
+        version = (await exec(binary, ['--version'], cwd)).trim().slice(0, 100);
+        // Some CLI launchers exit zero when their child dies before printing a
+        // version. Do not mistake that empty response for a working install.
+        if (!version) throw new Error('Empty opencode version');
+      } catch { return {installed: false, version: null, authReported: false, invocationVerified, provider: 'opencode', message: 'opencode 无法启动，请检查安装。'}; }
       let authReported = false;
       try { authReported = /[1-9]\d*\s+credential/.test(await exec(binary, ['auth', 'list'], cwd)); } catch { /* auth list does not prove an invocation */ }
       return {installed: true, version, authReported, invocationVerified, provider: 'opencode', message: invocationVerified ? 'opencode 已完成实际调用。' : authReported ? 'opencode 已登录；尚未完成实际调用验证。' : 'opencode 已安装，请登录后发送一个问题验证。'};
