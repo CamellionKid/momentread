@@ -14,13 +14,15 @@
 npm ci
 npm run build
 npm test
+npx playwright install chromium
+npm run test:browser
 ```
 
 开发模式（双终端）与浏览器规模验收命令见 [README 开发与测试一节](README.md#开发与测试)。
 
 ## 提交 PR 前
 
-- 通过 `npm run typecheck` 与全部自动化测试（当前 244 项）
+- 通过 `npm run typecheck` 与全部自动化测试
 - 不把书籍文件、学习数据、凭据、构建产物或个人路径新引入 Git
 - 提交格式沿用 `[scope] short imperative description`
 - 涉及与 AI 或原著匹配的行为变更时，请同步更新相关 docs；不要宣称未经验证的能力（例如原著自动检索的当前状态见 [STATUS](docs/development/STATUS.md)）
@@ -28,3 +30,5 @@ npm test
 ## 报告缺陷
 
 Issue 请附：复现步骤、期望与实际行为、`npm run build` 与相关测试输出。涉及 AI 回复质量的问题，请附脱敏后的最小复现文本，不要包含书籍版权内容或个人信息。
+
+CI 与标签发布共用验证工作流；发布必须依赖同一提交的验证结果。浏览器冒烟使用临时合成书库和可控模型替身，覆盖导入、阅读、慢状态响应、取消、切换／卸载及刷新恢复；不替代真实模型能力验收。本机可使用 `MOMENTREAD_BROWSER_CHANNEL=chrome npm run test:browser` 测试已有 Chrome。

@@ -44,7 +44,7 @@ export class ControlledAdapter implements ClaudeAdapter {
   async start(request:StartRun):Promise<RunHandle>{
     this.starts.push(request);
     const queue=new EventQueue();let seq=0;
-    const control:RunControl={request,emit:(type,data)=>queue.push({runId:request.runId,bookId:request.bookId,discussionId:request.discussionId,seq:++seq,type,data,createdAt:new Date().toISOString()}),end:()=>queue.end()};
+    const control:RunControl={request,emit:(type,data)=>queue.push({runId:request.runId,bookId:request.bookId,discussionId:request.discussionId,seq:++seq,type,data,createdAt:new Date().toISOString()}),end:()=>{queue.end();this.controls.delete(request.runId);}};
     this.controls.set(request.runId,control);
     control.emit('initialized',{cliSessionId:request.session.mode==='resume'?request.session.cliSessionId:randomUUID(),tools:[]});
     const script=this.scripts.shift();
@@ -54,17 +54,17 @@ export class ControlledAdapter implements ClaudeAdapter {
     return {runId:request.runId,events:queue};
   }
   async cancel(runId:string){this.cancellations.push(runId);const control=this.controls.get(runId);if(control){control.emit('cancelled',{text:'已生成的合成片段',sessionReusable:false,forced:false});control.end();}}
-  async answerPermission(){throw new Error('Permission interaction is outside this synthetic adapter fixture');}
+  async answerPermission(_runId:string,_requestId:string,_decision:'allowRun'|'denyRun'){throw new Error('Permission interaction is outside this synthetic adapter fixture');}
 }
 
-export async function makeHarness(adapter=new ControlledAdapter(),existingDir?:string,provider:'claude'|'opencode'='claude',adapterFactory?:(provider:'claude'|'opencode')=>ClaudeAdapter){
+export async function makeHarness(adapter=new ControlledAdapter(),existingDir?:string,provider:'claude'|'opencode'='claude',adapterFactory?:(provider:'claude'|'opencode')=>ClaudeAdapter,matchingOptions?:Parameters<typeof createMatchingService>[2]){
   const dir=existingDir??await mkdtemp(join(tmpdir(),'momentread-independent-system-'));
   const store=createStore(dir);
   const library=createBookLibrary(store,dir);
   const learning=createLearningService(store);
-  const matching=createMatchingService(store,library);
-  const {app}=createApp({store,library,learning,matching,adapter,ai:{provider},...(adapterFactory?{adapterFactory}:{})});
-  return {dir,store,library,learning,matching,adapter,app,
+  const matching=createMatchingService(store,library,matchingOptions);
+  const {app,runs}=createApp({store,library,learning,matching,adapter,ai:{provider},...(adapterFactory?{adapterFactory}:{})});
+  return {dir,store,library,learning,matching,adapter,app,runs,
     request:(path:string,method='GET',body?:unknown)=>app.request(new Request(`http://localhost${path}`,{method,headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)})),
     async upload(path:string,bytes:Uint8Array,filename='synthetic.epub'){const form=new FormData();form.set('file',new File([Uint8Array.from(bytes)],filename,{type:'application/epub+zip'}));return app.request(new Request(`http://localhost${path}`,{method:'POST',body:form}));},
     async state(bookId:string):Promise<BookState>{const response=await app.request(`/api/books/${bookId}/state`);if(!response.ok)throw new Error(`state request failed: ${response.status} ${await response.text()}`);return BookStateResponseSchema.parse(await response.json());},

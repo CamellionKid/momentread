@@ -192,13 +192,14 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): ClaudeA
         write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: {behavior: 'deny', message: 'This matching run reached its public-network request limit. Use the evidence already collected.'}}});
         return;
       }
-      if (state.networkDecision) {
-        write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: state.networkDecision === 'allowRun' ? {behavior: 'allow', updatedInput: input} : {behavior: 'deny', message: 'The user denied public-network access for this matching run. Do not retry it.'}}});
+      const networkDecision = state.request.lifecycle?.signal.aborted ? 'denyRun' : state.request.lifecycle ? state.request.lifecycle.networkDecision : state.networkDecision;
+      if (networkDecision) {
+        write(state, {type: 'control_response', response: {subtype: 'success', request_id: requestId, response: networkDecision === 'allowRun' ? {behavior: 'allow', updatedInput: input} : {behavior: 'deny', message: 'The user denied public-network access for this matching run. Do not retry it.'}}});
         return;
       }
       const needsPrompt = state.permissions.size === 0;
       state.permissions.set(requestId, {toolName, input});
-      if (needsPrompt) emit(state, 'permission_required', {requestId, toolName, input, description: '本次原著检索会使用 WebSearch／WebFetch 访问公开网络。允许后，同一轮检索无需逐条确认；最多执行 3 次搜索和 5 次正文取回。'});
+      if (needsPrompt) emit(state, 'permission_required', {requestId, toolName, input, description: '本次原著检索会使用 WebSearch／WebFetch，并由服务器独立取回候选正文。允许后，同一轮检索无需逐条确认；最多执行 3 次搜索、5 次工具取回及 8 个候选核对。'});
     }
     if (message.type === 'system' && message.subtype === 'permission_denied') emit(state, 'permission_resolved', {requestId: String(message.tool_use_id || ''), toolName: String(message.tool_name || ''), decision: 'deny'});
     if (message.type === 'result') {

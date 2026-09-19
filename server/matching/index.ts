@@ -11,7 +11,7 @@ const ResultSchema = z.object({candidates:z.array(CandidateSchema).max(8)}).stri
 export const MATCHING_OUTPUT_SCHEMA = z.toJSONSchema(ResultSchema);
 const hash = (text:string) => createHash('sha256').update(text).digest('hex');
 type LocalDocument = {url:string;text:string;title:string;language:string;fileVersionId:string;locator:string};
-type Options = {fetchDocument?:(url:string)=>Promise<RetrievedDocument>};
+type Options = {fetchDocument?:(url:string,signal?:AbortSignal)=>Promise<RetrievedDocument>};
 
 /** Local files are read only through the library's version-bound path guard. */
 function readOriginals(store:Store, library:BookLibrary, bookId:string):LocalDocument[] {
@@ -89,7 +89,8 @@ export function createMatchingService(store:Store,library:BookLibrary,options:Op
       const context:ContextSnapshot={id:randomUUID(),bookId:book.id,discussionId:item.id,discussionRevision:item.revision,input,messageIds:[],summaryDependencies:[],sourceIds:sources.map(source=>source.id),createdAt:now()};
       store.put('contexts',context);return context;
     },
-    async complete(discussionId,result) {
+    async complete(discussionId,result,lifecycle) {
+      lifecycle?.signal.throwIfAborted();
       const item=discussion(discussionId);
       const envelope = typeof result==='object' && result!==null && Object.hasOwn(result,'result') ? result as {result:unknown;toolResults?:Array<{toolName?:string;success?:boolean}>} : undefined;
       const toolFailed = envelope?.toolResults?.some(tool=>tool.success===false)??false;
@@ -101,6 +102,7 @@ export function createMatchingService(store:Store,library:BookLibrary,options:Op
       const local=readOriginals(store,library,item.bookId);
       const values:SourceCandidate[]=[];const seen=new Set<string>();
       for(const candidate of validation.data.candidates){
+        lifecycle?.signal.throwIfAborted();
         const key=JSON.stringify([candidate.url,normalizeText(candidate.quote)]);if(seen.has(key))continue;seen.add(key);
         let source:SourceCandidate={id:randomUUID(),bookId:item.bookId,discussionId:item.id,fileVersionId:null,language:candidate.language||'und',title:candidate.title||'待核来源',version:candidate.version||'待核',locator:candidate.locator,url:candidate.url,quote:'',evidenceHash:'',retrieval:'unavailable',verification:'unverified',selected:false,reason:'',createdAt:now()};
         try{
@@ -110,15 +112,20 @@ export function createMatchingService(store:Store,library:BookLibrary,options:Op
             if(!found)throw new AppError('ORIGINAL_REFERENCE_INVALID','候选未指向本书已导入的原著版本。');
             document={url:found.url,text:found.text,contentType:'text/plain'};
             source={...source,fileVersionId:found.fileVersionId,title:found.title,language:found.language==='und'?source.language:found.language,locator:found.locator,version:`用户提供原著 · ${found.fileVersionId}`};
-          }else document=await fetchDocument(candidate.url);
+          }else {
+            if(lifecycle?.networkDecision!=='allowRun')throw new AppError('SOURCE_NETWORK_DENIED','本次未获联网许可，未读取公开来源；可补充本地原著。',403);
+            document=await fetchDocument(candidate.url,lifecycle.signal);
+          }
+          lifecycle?.signal.throwIfAborted();
           const body=normalizeText(document.text);const quote=normalizeText(candidate.quote);
           source.url=document.url;
           if(!body.includes(quote))source={...source,retrieval:'unavailable',verification:'conflict',reason:'正文已取回，但候选引句未逐字出现在此文本中。可能是不同版本或错误候选，未将候选文字保存为原著引句。'};
           else source={...source,retrieval:'retrieved',quote:candidate.quote,evidenceHash:hash(body),reason:`已独立取回正文并核对引句；是否属于当前译本依据仍待核实。${candidate.reason?`候选说明（未经核实）：${candidate.reason}`:''}`};
-        }catch(error){source={...source,url:error instanceof AppError&&/SOURCE_URL_|ORIGINAL_REFERENCE_/.test(error.code)?'':source.url,retrieval:'fetch_failed',reason:error instanceof AppError?error.message:'原著来源读取失败，未取得可核对正文。请检查网络或补充本地原著。'};}
+        }catch(error){lifecycle?.signal.throwIfAborted();source={...source,url:error instanceof AppError&&/SOURCE_URL_|SOURCE_NETWORK_DENIED|ORIGINAL_REFERENCE_/.test(error.code)?'':source.url,retrieval:'fetch_failed',reason:error instanceof AppError?error.message:'原著来源读取失败，未取得可核对正文。请检查网络或补充本地原著。'};}
         values.push(source);
       }
       if(!values.length)values.push({id:randomUUID(),bookId:item.bookId,discussionId:item.id,fileVersionId:null,language:'und',title:'未找到可核对原著',version:'待核',locator:'',url:'',quote:'',evidenceHash:'',retrieval:toolFailed?'fetch_failed':'unavailable',verification:'unverified',selected:false,reason:toolFailed?'检索工具实际返回失败，未取得可核对原著。可稍后重试或补充原著；不能将此次失败当作已完成原文核对。':'检索没有返回可独立核对的候选。可能是工具不可用、无公开文本或暂无匹配；这不代表原著不存在。',createdAt:now()});
+      lifecycle?.signal.throwIfAborted();
       store.transaction(()=>{for(const source of values)store.put('sources',source);});
       if(toolFailed&&!values.some(source=>source.retrieval==='retrieved'))throw new AppError('MATCHING_TOOLS_UNAVAILABLE','原著检索工具不可用，未取得原文依据；本次中文解析将明确标注未对照原著。',502,true);
       return values;

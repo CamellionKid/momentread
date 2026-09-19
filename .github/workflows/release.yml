@@ -8,10 +8,15 @@ permissions:
   contents: write
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
   release:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

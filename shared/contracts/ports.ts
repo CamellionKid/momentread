@@ -20,7 +20,9 @@ export interface BookLibrary {
  restore(bytes:Uint8Array):Promise<void>;
 }
 export interface RuntimeProbe {installed:boolean;version:string|null;authReported:boolean;invocationVerified:boolean;message:string;provider?:'claude'|'opencode';}
-export interface StartRun {runId:string;bookId:string;discussionId:string;purpose:RunPurpose;contextSnapshotId:string;input:string;session:{mode:'new'}|{mode:'resume';cliSessionId:string};outputSchema?:Record<string,unknown>;model?:string;}
+// In-memory authority owned by RunManager, never inferred from model output.
+export interface RunLifecycle {readonly signal:AbortSignal;readonly networkDecision?:'allowRun'|'denyRun';}
+export interface StartRun {runId:string;bookId:string;discussionId:string;purpose:RunPurpose;contextSnapshotId:string;input:string;session:{mode:'new'}|{mode:'resume';cliSessionId:string};outputSchema?:Record<string,unknown>;model?:string;lifecycle?:RunLifecycle;}
 export interface RunHandle {runId:string;events:AsyncIterable<RunEvent>;}
 export interface ClaudeAdapter {probe():Promise<RuntimeProbe>;start(request:StartRun):Promise<RunHandle>;cancel(runId:string):Promise<void>;answerPermission(runId:string,requestId:string,decision:'allowRun'|'denyRun'):Promise<void>;models?():Promise<string[]>;}
 export interface ReaderHandle {restorePosition(position:ReadingPosition):Promise<void>;navigateToReference(reference:TextReference):Promise<void>;setTypography(fontSize:number):void;}
@@ -38,7 +40,7 @@ export interface LearningService {
 }
 export interface MatchingService {
  buildInput(discussionId:string):import('./index').ContextSnapshot;
- complete(discussionId:string,result:unknown):Promise<import('./index').SourceCandidate[]>;
+ complete(discussionId:string,result:unknown,lifecycle?:RunLifecycle):Promise<import('./index').SourceCandidate[]>;
  updateSource(id:string,patch:{selected?:boolean;verification?:'unverified'|'confirmed'|'conflict'}):import('./index').SourceCandidate;
  originalAdded(bookId:string,fileVersionId:string):void;
 }

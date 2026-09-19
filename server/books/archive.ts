@@ -2,6 +2,7 @@ import {inflateRawSync} from 'node:zlib';
 import {AppError} from '../../shared/contracts/index';
 
 export const EPUB_LIMITS = {compressed: 128 * 1024 * 1024, expanded: 256 * 1024 * 1024, entry: 64 * 1024 * 1024, count: 10000};
+export const MAX_ORIGINAL_TEXT_BYTES = 20 * 1024 * 1024;
 export const BACKUP_LIMITS = {compressed: 512 * 1024 * 1024, expanded: 1024 * 1024 * 1024, entry: 256 * 1024 * 1024, count: 20000};
 type Limits = typeof EPUB_LIMITS;
 const decoder = new TextDecoder('utf-8', {fatal: true});
