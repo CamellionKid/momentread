@@ -22,12 +22,18 @@ async function within(locator,viewport){const rect=await locator.boundingBox();a
  results.browserVersion=await browser.version();
  try {
   const page=await browser.newPage();page.setDefaultTimeout(10000);
-  page.on('pageerror',error=>results.pageErrors.push(error.message));
+  page.on('pageerror',error=>{results.pageErrors.push(error.message);console.error('PAGE_ERROR',error.stack);});
   page.on('request',request=>{const url=request.url();if(/^https?:/.test(url)&&!url.startsWith(TARGET_URL))results.outboundRequests.push(url);});
   async function screenshot(name){const file=path.join(OUTPUT_DIR,`${name}.png`);await page.screenshot({path:file});results.screenshots.push(file);return file;}
   async function check(name,fn){const began=Date.now();try{const detail=await fn();results.checks.push({name,status:'passed',durationMs:Date.now()-began,detail});console.log('PASS',name,JSON.stringify(detail??{}));return true;}catch(error){results.checks.push({name,status:'failed',durationMs:Date.now()-began,error:error.message});console.error('FAIL',name,error.message);await screenshot(`failure-${results.checks.length}`);await page.keyboard.press('Escape');return false;}finally{fs.writeFileSync(path.join(OUTPUT_DIR,'results.json'),JSON.stringify(results,null,2));}}
   for(const viewport of viewports){
    const label=`${viewport.width}x${viewport.height}`;
+   // The previous scenario scrolls/edits the reader. Leave through the public
+   // shelf action so its save queue drains before a full-page navigation.
+   if(page.url().startsWith(TARGET_URL)){
+    await page.getByRole('button',{name:'MomentRead 书架',exact:true}).click();
+    await page.getByRole('button',{name:'打开阅读',exact:true}).waitFor();
+   }
    await page.setViewportSize(viewport);
    // Public HTTP fixture setup: normalize workspace state before testing UI.
    const arranged=await page.request.patch(`${TARGET_URL}/api/books/${manifest.bookId}/workspace`,{data:{activeDiscussionId:manifest.deepestId,collapsed:[],fontSize:22}});assert.equal(arranged.status(),200);

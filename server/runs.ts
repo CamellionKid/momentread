@@ -15,6 +15,10 @@ export class RunManager {
   for(const m of store.list('messages'))if(m.status==='streaming')store.put('messages',{...m,status:'interrupted'});
  }
  busy(discussionId:string){return [...this.active.values()].some(r=>r.discussionId===discussionId)}
+ assertAvailable(discussionId?:string){
+  if(discussionId&&this.busy(discussionId))throw new AppError('RUN_BUSY','当前讨论仍有运行，请等待或停止后重试。',409,true);
+  if(this.active.size>=3)throw new AppError('RUNTIME_BUSY','当前任务较多，请稍后重试。',429,true);
+ }
  private reusableSession(context:ContextSnapshot,provider:'claude'|'opencode'){
   // A session may be resumed only by its owning runtime and only when no
   // completed exchange happened elsewhere since (at most the triggering user
@@ -25,8 +29,7 @@ export class RunManager {
    .sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0];
  }
  async start(context:ContextSnapshot,purpose:RunPurpose,hooks:Hooks={},outputSchema?:Record<string,unknown>):Promise<Run>{
-  if(this.busy(context.discussionId))throw new AppError('RUN_BUSY','当前讨论仍有运行，请等待或停止后重试。',409,true);
-  if(this.active.size>=3)throw new AppError('RUNTIME_BUSY','当前任务较多，请稍后重试。',429,true);
+  this.assertAvailable(context.discussionId);
   const {adapter,provider}=this.resolve();
   const pinned:Pinned={adapter,provider,model:this.store.getIdempotent(`ai.model.${provider}`) as string|undefined};
   const session=purpose==='discussion'?this.reusableSession(context,provider):undefined;
