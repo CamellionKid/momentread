@@ -7,6 +7,7 @@ import {BookSchema, EventSchema, WorkspaceSchema} from '../../shared/contracts';
 import {BookListResponseSchema, ConfirmResponseSchema, DailyReportResponseSchema, HealthResponseSchema, HistoryResponseSchema, RuntimeResponseSchema} from '../../shared/contracts/http';
 import type {Book, Discussion} from '../../shared/contracts';
 import {ControlledAdapter, importSynthetic, makeHarness, parseSse, reference, syntheticEpub, terminalRun, waitFor} from '../contract/system-fixtures';
+import {version} from '../../package.json';
 import type {Harness} from '../contract/system-fixtures';
 
 const opened:Harness[]=[];
@@ -20,7 +21,7 @@ async function branch(h:Harness,parent:Discussion){const message=await answer(h,
 
 describe('independent HTTP and system acceptance using synthetic inputs',()=>{
   it('A21: public read endpoints match their response contracts when the AI backend is unavailable',async()=>{
-    const h=await harness();const health=await h.request('/api/health');expect(health.ok).toBe(true);HealthResponseSchema.parse(await health.json());
+    const h=await harness();const health=await h.request('/api/health');expect(health.ok).toBe(true);expect(HealthResponseSchema.parse(await health.json()).version).toBe(version);
     const runtime=await h.request('/api/runtime');expect(runtime.ok).toBe(true);expect(RuntimeResponseSchema.parse(await runtime.json())).toMatchObject({installed:false,invocationVerified:false});
     const book=await importSynthetic(h);const list=await h.request('/api/books');expect(list.ok).toBe(true);expect(BookListResponseSchema.parse(await list.json()).map(item=>item.id)).toEqual([book.id]);
     expect((await h.state(book.id)).book.id).toBe(book.id);const report=await h.request(`/api/books/${book.id}/report?date=2026-09-10&timezone=UTC`);expect(report.ok).toBe(true);expect(DailyReportResponseSchema.parse(await report.json()).book.id).toBe(book.id);expect(h.adapter.starts).toHaveLength(0);

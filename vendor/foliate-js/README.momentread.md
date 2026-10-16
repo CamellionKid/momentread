@@ -8,4 +8,6 @@ The original MIT license is preserved in `LICENSE`. Only `epub.js`, `epubcfi.js`
 
 Local patch: the iframe sandbox in `paginator.js` permits `allow-same-origin` only, omitting upstream `allow-scripts`; a descriptive iframe title is added. The adapter also sanitizes content before loading and after resource rewriting, and injects per-document CSP. The upstream comment documents the historical WebKit event limitation. Chromium is the first-release browser target; Safari event behavior must be verified separately before claiming support.
 
-When updating, review this patch and the iframe isolation tests. Do not replace the directory with an unpinned checkout or copy a nested `.git` directory.
+Local lifecycle patch (2026-09-19): destruction disconnects observers even before the first chapter exists, settles pending iframe loads, and ignores late chapter/font/animation/resize callbacks. Detached iframe documents are not laid out. The upstream commit remains pinned; see `tests/unit/reader-lifecycle.test.ts` and the production Chrome scale suite for regression coverage.
+
+When updating, review these patches and the iframe isolation/lifecycle tests. Do not replace the directory with an unpinned checkout or copy a nested `.git` directory.

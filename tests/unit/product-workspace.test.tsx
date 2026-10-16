@@ -110,6 +110,45 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("product workspace save and response ownership", () => {
+  it.each([1000, 2000])("accepts %i ms polling responses without overlapping requests and eventually shows completion", async (delay) => {
+    vi.stubGlobal("EventSource", class { addEventListener() {} close() {} });
+    const active = state();
+    active.runs = [{id:"run-a",bookId:"book-a",discussionId:"book-a-root",purpose:"discussion",status:"running",contextSnapshotId:"context-a",sessionId:null,sessionReusable:false,partialText:"",result:null,error:null,createdAt:date,updatedAt:date}];
+    vi.mocked(api.state).mockResolvedValueOnce(active);
+    await act(async () => { await model.open("book-a"); });
+    let inflight = 0, maximum = 0, responses = 0;
+    vi.mocked(api.state).mockImplementation(() => {
+      maximum = Math.max(maximum, ++inflight);
+      return new Promise(resolve => setTimeout(() => {
+        inflight--; responses++;
+        resolve({...active, runs:[{...active.runs[0], partialText:String(responses), status:responses >= 3 ? "completed" : "running"}]});
+      }, delay));
+    });
+    // Separate ticks let React commit every accepted response and update effects.
+    for (let elapsed=0; elapsed<10000; elapsed+=100)
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(maximum).toBe(1);
+    expect(model.state?.runs[0]).toMatchObject({status:"completed",partialText:"3"});
+    expect(responses).toBe(3);
+  });
+  it("coalesces concurrent refreshes and ignores an old response after leaving and reopening the same book", async () => {
+    await act(async () => { await model.open("book-a"); });
+    const old=deferred<BookState>();
+    vi.mocked(api.state).mockReturnValueOnce(old.promise);
+    let first!:Promise<void>, second!:Promise<void>;
+    await act(async () => { first=model.refresh(); second=model.refresh(); });
+    expect(api.state).toHaveBeenCalledTimes(2);
+    await act(async () => { await model.open("book-b"); });
+    // A reopened book must wait for its prior in-flight request, then read anew.
+    let reopened!:Promise<void>;
+    await act(async () => { reopened=model.open("book-a"); });
+    await act(async () => {
+      old.resolve({...state("book-a"),book:{...state().book,title:"obsolete"}});
+      await Promise.all([first,second,reopened]);
+    });
+    expect(model.state?.book.title).toBe("book-a");
+    expect(model.loading).toBe(false);
+  });
   it("consumes retry SSE updates in sequence, ignores another book, and clears feedback when output resumes or the run finishes", async () => {
     class Stream {
       static instances: Stream[] = [];

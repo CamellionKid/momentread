@@ -10,6 +10,7 @@ import {createMatchingService} from '../../server/matching/index';
 import {AppError,now,type Discussion} from '../../shared/contracts/index';
 import type {Store} from '../../shared/contracts/ports';
 
+const allowed={signal:new AbortController().signal,networkDecision:'allowRun' as const};
 const stores:Store[]=[];const dirs:string[]=[];
 const epub=(title='Synthetic translation',text='Synthetic reading paragraph.',language='zh')=>zipSync({mimetype:strToU8('application/epub+zip'),'META-INF/container.xml':strToU8('<container><rootfiles><rootfile full-path="EPUB/package.opf"/></rootfiles></container>'),'EPUB/package.opf':strToU8(`<package><metadata><title>${title}</title><language>${language}</language></metadata><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/></spine></package>`),'EPUB/one.xhtml':strToU8(`<html lang="${language}"><head><title>${title}</title></head><body><p>${text}</p></body></html>`)});
 async function fixture(){const dir=await mkdtemp(join(tmpdir(),'momentread-matching-'));dirs.push(dir);const store=createStore(dir);stores.push(store);const library=createBookLibrary(store,dir);const book=await library.importBook(epub(),'fixture.epub');const id=randomUUID();const discussion:Discussion={id,bookId:book.id,parentId:null,rootId:id,title:'Synthetic discussion',source:{bookId:book.id,fileVersionId:book.fileVersionId,segments:[{spineId:'one',chapter:'Chapter 1',cfi:'epubcfi(/6/2!/4/2)',exact:'Synthetic reading paragraph.',prefix:'',suffix:''}]},origin:null,draft:'',scrollTop:0,revision:0,needsMerge:false,createdAt:now()};store.put('discussions',discussion);return{store,library,book,discussion};}
@@ -17,9 +18,20 @@ const candidate=(quote:string,language='en',url='https://texts.example.org/chapt
 afterEach(async()=>{for(const store of stores.splice(0))store.close();for(const dir of dirs.splice(0))await rm(dir,{recursive:true,force:true});});
 
 describe('original source verification and history',()=>{
+  it('does not expose unvalidated model URLs when network permission is absent',async()=>{
+    const {store,library,discussion}=await fixture();const fetchDocument=vi.fn();const service=createMatchingService(store,library,{fetchDocument});
+    const sources=await service.complete(discussion.id,{candidates:[candidate('text','en','javascript:alert(1)')]});
+    expect(sources[0]).toMatchObject({url:'',quote:'',retrieval:'fetch_failed'});expect(fetchDocument).not.toHaveBeenCalled();
+  });
+  it.each(['denyRun',undefined] as const)('still verifies local originals with %s public-network consent',async networkDecision=>{
+    const {store,library,book,discussion}=await fixture();const fetchDocument=vi.fn();const service=createMatchingService(store,library,{fetchDocument});
+    const file=await library.importOriginal(book.id,strToU8('Local original text.'),'original.txt');
+    const [source]=await service.complete(discussion.id,{candidates:[candidate('Local original text.','en',`momentread-original://${file.id}/text`)]},{signal:new AbortController().signal,networkDecision});
+    expect(source.retrieval).toBe('retrieved');expect(fetchDocument).not.toHaveBeenCalled();
+  });
   it.each([['de','Alle Erkenntnis beginnt mit Erfahrung.'],['en','Our knowledge begins with experience.'],['la','Ego sum, ego existo.']])('verifies exact %s text but does not certify the edition',async(language,quote)=>{
     const {store,library,discussion}=await fixture();const service=createMatchingService(store,library,{fetchDocument:async url=>({url,text:`Before. ${quote} After.`,contentType:'text/plain'})});
-    const [source]=await service.complete(discussion.id,{candidates:[candidate(quote,language)]});
+    const [source]=await service.complete(discussion.id,{candidates:[candidate(quote,language)]},allowed);
     expect(source).toMatchObject({retrieval:'retrieved',verification:'unverified',selected:false,quote,language});expect(source.evidenceHash).toHaveLength(64);
     expect(service.updateSource(source.id,{selected:true})).toMatchObject({selected:true,verification:'unverified'});
     expect(service.updateSource(source.id,{verification:'confirmed'}).verification).toBe('confirmed');
@@ -27,7 +39,7 @@ describe('original source verification and history',()=>{
   });
   it('rejects model paraphrases, other editions, script-only quotes, and case changes',async()=>{
     const {store,library,discussion}=await fixture();const service=createMatchingService(store,library,{fetchDocument:async url=>({url,text:'Our cognition commences with experience.',contentType:'text/plain'})});
-    const [source]=await service.complete(discussion.id,{candidates:[candidate('Our knowledge begins with experience.')]});
+    const [source]=await service.complete(discussion.id,{candidates:[candidate('Our knowledge begins with experience.')]},allowed);
     expect(source).toMatchObject({retrieval:'unavailable',verification:'conflict',quote:'',evidenceHash:''});
     expect(()=>service.updateSource(source.id,{selected:true})).toThrow('尚未取得');
     expect(()=>service.updateSource(source.id,{verification:'confirmed'})).toThrow('尚未取得');
@@ -38,7 +50,7 @@ describe('original source verification and history',()=>{
   });
   it('records retrieval failures separately and never stores the alleged quote',async()=>{
     const {store,library,discussion}=await fixture();const service=createMatchingService(store,library,{fetchDocument:async()=>{throw new AppError('SOURCE_HTTP_FAILED','原著来源返回 HTTP 403，未取得正文。');}});
-    const [source]=await service.complete(discussion.id,{candidates:[candidate('Alleged original text.')]});
+    const [source]=await service.complete(discussion.id,{candidates:[candidate('Alleged original text.')]},allowed);
     expect(source).toMatchObject({retrieval:'fetch_failed',quote:'',evidenceHash:'',verification:'unverified'});expect(source.reason).toContain('403');
   });
   it('does not mark failed search tools as successful no-result',async()=>{
@@ -48,7 +60,7 @@ describe('original source verification and history',()=>{
   });
   it('accepts runtime result envelopes while independently verifying candidates',async()=>{
     const {store,library,discussion}=await fixture();const service=createMatchingService(store,library,{fetchDocument:async url=>({url,text:'Actual retrieved text.',contentType:'text/plain'})});
-    const values=await service.complete(discussion.id,{result:{candidates:[candidate('Actual retrieved text.')]},toolResults:[{toolName:'WebSearch',success:true}]});
+    const values=await service.complete(discussion.id,{result:{candidates:[candidate('Actual retrieved text.')]},toolResults:[{toolName:'WebSearch',success:true}]},allowed);
     expect(values[0].retrieval).toBe('retrieved');
   });
   it('requires strict JSON and caps candidate input',async()=>{
@@ -82,6 +94,6 @@ describe('original source verification and history',()=>{
   });
   it('deduplicates identical candidates in a run while preserving separate run history',async()=>{
     const {store,library,discussion}=await fixture();const service=createMatchingService(store,library,{fetchDocument:async url=>({url,text:'A verifiable sentence.',contentType:'text/plain'})});const input={candidates:[candidate('A verifiable sentence.'),candidate('A verifiable sentence.')]};
-    expect(await service.complete(discussion.id,input)).toHaveLength(1);expect(await service.complete(discussion.id,input)).toHaveLength(1);expect(store.list('sources')).toHaveLength(2);
+    expect(await service.complete(discussion.id,input,allowed)).toHaveLength(1);expect(await service.complete(discussion.id,input,allowed)).toHaveLength(1);expect(store.list('sources')).toHaveLength(2);
   });
 });

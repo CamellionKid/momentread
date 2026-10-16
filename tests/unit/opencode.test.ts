@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it} from 'vitest';
-import {mkdtemp, writeFile, chmod, rm, realpath} from 'node:fs/promises';
+import {mkdtemp, writeFile, chmod, rm, realpath, readdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -68,6 +68,14 @@ describe('opencode adapter arguments and helpers', () => {
     expect(parseModels('opencode-go/deepseek-v4-flash\nzijie/doubao-x\n\nnot a model line\n')).toEqual(['opencode-go/deepseek-v4-flash', 'zijie/doubao-x']);
     expect(parseModels('')).toEqual([]);
   });
+  it.each([
+    '右括号 } 是文字',
+    '左括号 { 是文字',
+    '带有转义引号 " 和反斜杠 \\ 的 {文字}',
+  ])('extracts fenced JSON without counting braces inside strings: %s', content => {
+    const output = {content, nested: {items: [{value: '}'}, {value: '{'}]}};
+    expect(extractStructuredOutput('```json\n' + JSON.stringify(output) + '\n```')).toEqual(output);
+  });
 });
 
 describe('opencode adapter process lifecycle', () => {
@@ -130,12 +138,61 @@ describe('opencode adapter process lifecycle', () => {
     expect(probe).toMatchObject({installed: true, version: '1.18.25-test', authReported: true, provider: 'opencode'});
     expect(await ai.models?.()).toEqual(['opencode-go/deepseek-v4-flash', 'zijie/doubao-x']);
   });
+  it.each(['', ' \n\t'])('does not report an empty version as a working installation (%j)', async version => {
+    const f = await fixture();
+    cleanup = f.cleanup;
+    await writeFile(join(f.cwd, 'fixture.cjs'), `process.stdout.write(${JSON.stringify(version)});`);
+    const ai = createOpencodeAdapter({binary: f.binary, cwd: f.cwd});
+    expect(await ai.probe()).toMatchObject({installed: false, version: null, authReported: false, invocationVerified: false, provider: 'opencode', message: 'opencode 无法启动，请检查安装。'});
+  });
   it('cancels a running process', async () => {
     const ai = await adapter();
     const handle = await ai.start(request());
     await ai.cancel(handle.runId);
     const events = await collect(handle.events);
     expect(['cancelled', 'completed']).toContain(events.at(-1)?.type);
+  });
+  it('honors cancellation while the adapter is preparing to spawn', async () => {
+    const ai = await adapter();
+    const input = request();
+    const starting = ai.start(input);
+    await ai.cancel(input.runId);
+    const events = await collect((await starting).events);
+    expect(events.map(event => event.type)).toEqual(['cancelled']);
+    expect(events[0].data.sessionReusable).toBe(false);
+    expect((await ai.probe()).invocationVerified).toBe(false);
+  });
+  it('removes a long-input attachment when startup is cancelled', async () => {
+    const f = await fixture();
+    cleanup = f.cleanup;
+    const ai = createOpencodeAdapter({binary: f.binary, cwd: f.cwd});
+    const input = request({input: '合成内容'.repeat(40000)});
+    const starting = ai.start(input);
+    await ai.cancel(input.runId);
+    expect((await collect((await starting).events)).map(event => event.type)).toEqual(['cancelled']);
+    expect((await readdir(f.cwd)).filter(name => name.startsWith('input-'))).toEqual([]);
+  });
+  it('releases the startup reservation after configuration failure', async () => {
+    const f = await fixture();
+    cleanup = f.cleanup;
+    const blocked = join(f.cwd, 'not-a-directory');
+    await writeFile(blocked, 'synthetic marker');
+    const ai = createOpencodeAdapter({binary: f.binary, cwd: blocked});
+    const input = request();
+    await expect(ai.start(input)).rejects.toMatchObject({code: 'EEXIST'});
+    await ai.cancel(input.runId);
+    await expect(ai.start(input)).rejects.toMatchObject({code: 'EEXIST'});
+  });
+  it('reserves the discussion before asynchronous startup work', async () => {
+    const ai = await adapter();
+    const input = request();
+    const first = ai.start(input);
+    const second = ai.start({...input, runId: randomUUID()});
+    const results = await Promise.allSettled([first, second]);
+    // Always drain fixture processes, even on the buggy implementation.
+    for (const result of results) if (result.status === 'fulfilled') await collect(result.value.events);
+    expect(results[0].status).toBe('fulfilled');
+    expect(results[1]).toMatchObject({status: 'rejected', reason: {code: 'RUN_CONFLICT'}});
   });
   it('rejects permission answers because opencode has no permission protocol', async () => {
     const ai = await adapter();

@@ -1,14 +1,32 @@
 import {lookup as dnsLookup} from 'node:dns/promises';
-import {request as httpRequest} from 'node:http';
+import {request as httpRequest, type ClientRequest} from 'node:http';
 import {request as httpsRequest} from 'node:https';
 import {isIP} from 'node:net';
 import sanitizeHtml from 'sanitize-html';
 import {AppError} from '../../shared/contracts/index';
+import {APP_VERSION} from '../../shared/version';
 
 export const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 15000;
-export type Lookup = (hostname: string) => Promise<Array<{address: string; family: number}>>;
+export type Lookup = (hostname: string, signal?: AbortSignal) => Promise<Array<{address: string; family: number}>>;
 export type RetrievedDocument = {url: string; text: string; contentType: string};
+
+function abortable<T>(pending:Promise<T>,signal?:AbortSignal):Promise<T> {
+  if(!signal)return pending;
+  return new Promise<T>((resolve,reject)=>{
+    const abort=()=>reject(signal.reason);
+    signal.addEventListener('abort',abort,{once:true});
+    pending.then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));
+    if(signal.aborted)abort();
+  });
+}
+function cancelRequest(request:ClientRequest,signal?:AbortSignal) {
+  if(!signal)return;
+  const abort=()=>request.destroy(signal.reason);
+  signal.addEventListener('abort',abort,{once:true});
+  request.once('close',()=>signal.removeEventListener('abort',abort));
+  if(signal.aborted)abort();
+}
 
 /** Only globally routed addresses are eligible; DNS answers are pinned per hop. */
 export function isPublicAddress(input: string): boolean {
@@ -32,10 +50,11 @@ export function isFakeIPAddress(address:string):boolean {
 }
 
 /** Fixed resolver, pinned IP and certificate hostname. Never supplied by candidates. */
-export async function trustedDohLookup(hostname:string):Promise<Array<{address:string;family:number}>> {
+export async function trustedDohLookup(hostname:string,signal?:AbortSignal):Promise<Array<{address:string;family:number}>> {
+  signal?.throwIfAborted();
   const url=new URL('https://cloudflare-dns.com/dns-query');url.searchParams.set('name',hostname);url.searchParams.set('type','A');
   const body=await new Promise<string>((resolve,reject)=>{
-    const request=httpsRequest(url,{headers:{'Accept':'application/dns-json','User-Agent':'MomentRead/0.1 source-verification'},
+    const request=httpsRequest(url,{headers:{'Accept':'application/dns-json','User-Agent':`MomentRead/${APP_VERSION} source-verification`},
       lookup:((_host:string,options:unknown,callback:(...args:any[])=>void)=>{if(typeof options==='object'&&options!==null&&'all' in options&&options.all)callback(null,[{address:'1.1.1.1',family:4}]);else callback(null,'1.1.1.1',4);}) as any,
     },res=>{
       if(res.statusCode!==200){res.resume();reject(new AppError('SOURCE_DNS_FAILED','可信 DNS 查询失败，未读取原著来源。',502,true));return;}
@@ -43,7 +62,7 @@ export async function trustedDohLookup(hostname:string):Promise<Array<{address:s
       res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>65536){res.destroy();reject(new AppError('SOURCE_DNS_FAILED','可信 DNS 响应无效。',502));}else chunks.push(chunk);});
       res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));res.on('error',reject);
     });
-    const timer=setTimeout(()=>request.destroy(new AppError('SOURCE_DNS_FAILED','可信 DNS 查询超时。',504,true)),5000);request.on('close',()=>clearTimeout(timer));request.on('error',reject);request.end();
+    const timer=setTimeout(()=>request.destroy(new AppError('SOURCE_DNS_FAILED','可信 DNS 查询超时。',504,true)),5000);request.on('close',()=>clearTimeout(timer));request.on('error',reject);cancelRequest(request,signal);request.end();
   });
   try{
     const result=JSON.parse(body) as {Status:unknown;Answer?:Array<{type?:unknown;data?:unknown}>};
@@ -54,7 +73,8 @@ export async function trustedDohLookup(hostname:string):Promise<Array<{address:s
   }catch{throw new AppError('SOURCE_DNS_FAILED','可信 DNS 未返回可验证的公开地址，未读取原著来源。',502,true);}
 }
 
-export async function publicTarget(input: string, lookup: Lookup = hostname => dnsLookup(hostname, {all: true, verbatim: true}), resolveFake:Lookup=trustedDohLookup) {
+export async function publicTarget(input: string, lookup: Lookup = hostname => dnsLookup(hostname, {all: true, verbatim: true}), resolveFake:Lookup=trustedDohLookup,signal?:AbortSignal) {
+  signal?.throwIfAborted();
   let url: URL;
   try {url = new URL(input);} catch {throw new AppError('SOURCE_URL_INVALID', '原著来源地址无效。');}
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
@@ -62,10 +82,12 @@ export async function publicTarget(input: string, lookup: Lookup = hostname => d
     !host || host === 'localhost' || /\.(localhost|local|internal|home|lan|invalid)$/.test(host)) {
     throw new AppError('SOURCE_URL_BLOCKED', '仅允许公开 HTTP 或 HTTPS 原著来源。');
   }
-  let addresses = isIP(host) ? [{address: host, family: isIP(host)}] : await lookup(host);
+  let addresses = isIP(host) ? [{address: host, family: isIP(host)}] : await abortable(lookup(host,signal),signal);
+  signal?.throwIfAborted();
   // A hostname exclusively mapped to this reserved range identifies the local
   // TUN fake-IP resolver. Literal addresses and other private answers never fall back.
-  if(!isIP(host)&&addresses.length&&addresses.every(item=>isFakeIPAddress(item.address)))addresses=await resolveFake(host);
+  if(!isIP(host)&&addresses.length&&addresses.every(item=>isFakeIPAddress(item.address)))addresses=await abortable(resolveFake(host,signal),signal);
+  signal?.throwIfAborted();
   if (!addresses.length || addresses.some(item => !isPublicAddress(item.address))) throw new AppError('SOURCE_URL_BLOCKED', '原著来源解析到非公开地址，未发起读取。');
   url.hash = '';
   return {url, address: addresses[0]};
@@ -85,20 +107,23 @@ export function htmlText(html: string): string {
 }
 
 /** No browser, scripts, cookies, proxy credentials, or automatic redirects. */
-export async function fetchPublicDocument(input: string): Promise<RetrievedDocument> {
+export async function fetchPublicDocument(input: string, signal?:AbortSignal): Promise<RetrievedDocument> {
+  signal?.throwIfAborted();
   const deadline = Date.now() + TIMEOUT_MS;
   let current = input;
   for (let redirect = 0; redirect <= 4; redirect++) {
+    signal?.throwIfAborted();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const remaining = Math.max(1, deadline - Date.now());
     const target = await Promise.race([
-      publicTarget(current),
+      publicTarget(current,undefined,undefined,signal),
       new Promise<never>((_, reject) => {timer = setTimeout(() => reject(new AppError('SOURCE_TIMEOUT', '原著来源读取超时。', 504, true)), remaining);}),
     ]).finally(() => clearTimeout(timer));
+    signal?.throwIfAborted();
     if (Date.now() >= deadline) throw new AppError('SOURCE_TIMEOUT', '原著来源读取超时。', 504, true);
     const response = await new Promise<{status: number; location?: string; type: string; bytes: Buffer}>((resolve, reject) => {
       const request = (target.url.protocol === 'https:' ? httpsRequest : httpRequest)(target.url, {
-        method: 'GET', headers: {'User-Agent':'MomentRead/0.1 source-verification','Accept':'text/html,application/xhtml+xml,text/plain','Accept-Encoding':'identity'},
+        method: 'GET', headers: {'User-Agent':`MomentRead/${APP_VERSION} source-verification`,'Accept':'text/html,application/xhtml+xml,text/plain','Accept-Encoding':'identity'},
         lookup: ((_hostname: string, options: unknown, callback: (...args: any[]) => void) => {
           if (typeof options === 'object' && options !== null && 'all' in options && options.all) callback(null, [target.address]);
           else callback(null, target.address.address, target.address.family);
@@ -122,8 +147,9 @@ export async function fetchPublicDocument(input: string): Promise<RetrievedDocum
         res.on('error', reject);
       });
       const timeout = setTimeout(() => request.destroy(new AppError('SOURCE_TIMEOUT', '原著来源读取超时。', 504, true)), Math.max(1, deadline - Date.now()));
-      request.on('close', () => clearTimeout(timeout)); request.on('error', reject); request.end();
+      request.on('close', () => clearTimeout(timeout)); request.on('error', reject); cancelRequest(request,signal); request.end();
     });
+    signal?.throwIfAborted();
     if (response.status >= 300 && response.status < 400) {
       if (!response.location || redirect === 4) throw new AppError('SOURCE_REDIRECT_FAILED', '原著来源重定向次数过多或地址缺失。', 502);
       const next = new URL(response.location, target.url);

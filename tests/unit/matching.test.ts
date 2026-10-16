@@ -14,14 +14,14 @@ describe('public original source boundary',()=>{
   });
   it('uses trusted resolution only for fake-IP hostnames and rechecks the result',async()=>{
     const fallback=vi.fn(async()=>[{address:'8.8.8.8',family:4}]);
-    const target=await publicTarget('https://example.org/',async()=>[{address:'198.18.2.3',family:4}],fallback);expect(target.address.address).toBe('8.8.8.8');expect(fallback).toHaveBeenCalledExactlyOnceWith('example.org');
+    const target=await publicTarget('https://example.org/',async()=>[{address:'198.18.2.3',family:4}],fallback);expect(target.address.address).toBe('8.8.8.8');expect(fallback).toHaveBeenCalledExactlyOnceWith('example.org',undefined);
     await expect(publicTarget('https://example.org/',async()=>[{address:'198.18.2.3',family:4}],async()=>[{address:'10.0.0.1',family:4}])).rejects.toMatchObject({code:'SOURCE_URL_BLOCKED'});
     fallback.mockClear();await expect(publicTarget('https://example.org/',async()=>[{address:'192.168.0.1',family:4}],fallback)).rejects.toThrow();expect(fallback).not.toHaveBeenCalled();
     await expect(publicTarget('https://198.18.2.3/',async()=>[],fallback)).rejects.toThrow();expect(fallback).not.toHaveBeenCalled();
   });
   it('returns the resolved address for a pinned request and removes fragment',async()=>{
     const lookup=vi.fn(async()=>[{address:'8.8.8.8',family:4}]);const target=await publicTarget('https://example.org/chapter#p2',lookup);
-    expect(target.address).toEqual({address:'8.8.8.8',family:4});expect(target.url.href).toBe('https://example.org/chapter');expect(lookup).toHaveBeenCalledExactlyOnceWith('example.org');
+    expect(target.address).toEqual({address:'8.8.8.8',family:4});expect(target.url.href).toBe('https://example.org/chapter');expect(lookup).toHaveBeenCalledExactlyOnceWith('example.org',undefined);
   });
   it('extracts inert text and decodes entities without running scripts or changing wording',()=>{
     const text=htmlText('<p>Vernunft &amp; Erfahrung.</p><script>MAGIC_BAD()</script><style>bad</style><p>Ego&nbsp;sum, &ldquo;existo&rdquo;.</p>');

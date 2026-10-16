@@ -8,7 +8,7 @@ import {z} from 'zod';
 import {AppError, FileVersionSchema, entitySchemas, now, type Book, type FileVersion} from '../../shared/contracts/index';
 import type {BookLibrary, Store} from '../../shared/contracts/ports';
 import {readStoreSnapshot, restoreStoreSnapshot, serializeStore} from '../storage/index';
-import {assertArchivePath, BACKUP_LIMITS, readArchive} from './archive';
+import {assertArchivePath, BACKUP_LIMITS, MAX_ORIGINAL_TEXT_BYTES, readArchive} from './archive';
 
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const decode = (bytes: Uint8Array) => new TextDecoder('utf-8', {fatal: true}).decode(bytes);
@@ -167,7 +167,7 @@ export function createBookLibrary(store: Store, dataDir: string): BookLibrary {
       if (!['.epub', '.txt'].includes(extension)) throw new AppError('UNSUPPORTED_FORMAT', '原著仅支持 EPUB 或 UTF-8 TXT。');
       if (extension === '.epub') epubMetadata(bytes);
       else {
-        if (!bytes.length || bytes.length > 20 * 1024 * 1024) throw new AppError('ORIGINAL_TOO_LARGE', 'TXT 原著必须为非空文件且不超过 20 MB。', 413);
+        if (!bytes.length || bytes.length > MAX_ORIGINAL_TEXT_BYTES) throw new AppError('ORIGINAL_TOO_LARGE', 'TXT 原著必须为非空文件且不超过 20 MB。', 413);
         try { if (decode(bytes).includes('\0')) throw new Error('Binary text'); } catch { throw new AppError('INVALID_TEXT', 'TXT 原著必须使用 UTF-8 编码。'); }
       }
       const fingerprint = hash(bytes);

@@ -28,6 +28,7 @@ export function useWorkspace(onError: (message: string) => void) {
   const retrySequences = useRef(new Map<string, number>());
   const currentBook = useRef<string | null>(null);
   const requestSeq = useRef(0);
+  const requests = useRef(new Map<string, {epoch: number; again: boolean; promise: Promise<void>}>());
   const dirty = useRef(
     new Map<string, { draft?: string; scrollTop?: number }>(),
   );
@@ -46,20 +47,48 @@ export function useWorkspace(onError: (message: string) => void) {
     };
     setState(value);
   }, []);
+  const readState = useCallback(async (id: string, epoch: number) => {
+    // A book has one request at a time. Repeated refresh intents require at
+    // most one follow-up read, so mutations during a request are not lost.
+    let pending = requests.current.get(id);
+    while (pending) {
+      if (pending.epoch === epoch) {
+        pending.again = true;
+        return pending.promise;
+      }
+      await pending.promise.catch(() => {});
+      pending = requests.current.get(id);
+    }
+    if (currentBook.current !== id || requestSeq.current !== epoch) return;
+    const request = {epoch, again: false, promise: Promise.resolve()};
+    requests.current.set(id, request);
+    request.promise = (async () => {
+      try {
+        do {
+          request.again = false;
+          const next = await api.state(id);
+          if (currentBook.current !== id || requestSeq.current !== epoch) return;
+          merge(next);
+        } while (request.again);
+      } finally {
+        if (requests.current.get(id) === request) requests.current.delete(id);
+      }
+    })();
+    return request.promise;
+  }, [merge]);
   const refresh = useCallback(async () => {
     const id = currentBook.current;
     if (!id) return;
-    const seq = ++requestSeq.current;
+    const seq = requestSeq.current;
     try {
-      const next = await api.state(id);
-      if (currentBook.current === id && seq === requestSeq.current) merge(next);
+      await readState(id, seq);
     } catch (error) {
-      if (currentBook.current === id)
+      if (currentBook.current === id && seq === requestSeq.current)
         err.current(
           error instanceof Error ? error.message : "无法同步书籍状态。",
         );
     }
-  }, [merge]);
+  }, [readState]);
   const flush = useCallback(async () => {
     const task = async () => {
       while (true) {
@@ -118,22 +147,22 @@ export function useWorkspace(onError: (message: string) => void) {
       setRetries({});
       retrySequences.current.clear();
       try {
-        const next = await api.state(id);
+        await readState(id, seq);
         if (seq === requestSeq.current && currentBook.current === id) {
-          merge(next);
           localStorage.setItem("momentread.currentBook", id);
         }
       } catch (error) {
-        if (currentBook.current === id) {
+        if (currentBook.current === id && seq === requestSeq.current) {
           currentBook.current = previousBook;
+          requestSeq.current++;
           setLoading(false);
         }
         throw error;
       } finally {
-        if (currentBook.current === id) setLoading(false);
+        if (currentBook.current === id && seq === requestSeq.current) setLoading(false);
       }
     },
-    [flush, merge],
+    [flush, readState],
   );
   const edit = useCallback(
     (id: string, patch: { draft?: string; scrollTop?: number }) => {
@@ -239,11 +268,19 @@ export function useWorkspace(onError: (message: string) => void) {
     .join(",");
   useEffect(() => {
     if (!runIds) return;
-    const timer = setInterval(() => {
-      void refresh();
-    }, 700);
-    return () => clearInterval(timer);
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await refresh();
+      if (!disposed) timer = setTimeout(poll, 700);
+    };
+    timer = setTimeout(poll, 700);
+    return () => { disposed = true; clearTimeout(timer); };
   }, [runIds, refresh]);
+  useEffect(() => () => {
+    currentBook.current = null;
+    requestSeq.current++;
+  }, []);
   useEffect(() => {
     let disposed = false;
     setPermissions((previous) =>

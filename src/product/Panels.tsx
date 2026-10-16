@@ -6,6 +6,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { api } from "../api";
+import { APP_VERSION } from "../../shared/version";
 import type {
   BookState,
   DailyReport,
@@ -412,6 +413,7 @@ export function RuntimePanel({
   const providerName = probe?.provider === "opencode" ? "opencode" : "Claude Code";
   return (
     <Dialog title="AI 连接与本地数据" onClose={onClose}>
+      <p className="muted">MomentRead {APP_VERSION}</p>
       <label className="setting-row">AI 运行时</label>
       <div className="flow-options" role="group" aria-label="AI 运行时">
         <button
