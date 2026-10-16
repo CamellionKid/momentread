@@ -219,8 +219,8 @@ export const EpubReader = forwardRef<ReaderHandle, ReaderProps>(function EpubRea
       disposed = true; controller.abort(); instance.current = null;
       listeners.forEach(remove => remove());
       renderer?.removeEventListener('load', onLoad); renderer?.removeEventListener('relocate', onRelocate);
-      // Upstream destroy assumes a view already exists; loading may be cancelled earlier.
-      if (renderer?.getContents().length) renderer.destroy();
+      // Also release observers when leaving before the first chapter loads.
+      renderer?.destroy();
       renderer?.remove(); loadedBook?.destroy();
     };
   }, [props.book.id, props.book.fileVersionId, props.fileUrl, retry]);

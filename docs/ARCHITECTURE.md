@@ -1,6 +1,6 @@
-# MomentRead 技术选型与架构基线 v0.2
+# MomentRead 技术选型与当前架构
 
-更新日期：2026-09-10。用户已批准真实首版开发计划，生产工程已在仓库根目录实现并进入集成验收；`prototype/` 保留为独立设计参考。
+更新日期：2026-09-19。生产工程位于仓库根目录，产品版本以 `package.json` 为准；`prototype/` 保留为独立设计参考。
 
 本文件区分 **已实现的工程选择** 与 **已经取得的运行证据**。代码接入、单元测试、真实 CLI、浏览器与盲测是不同验收层级。当前 Claude provider 的公开网络工具仍有阻塞，不能宣称自动原著匹配或完整首版已验收通过。
 
@@ -16,7 +16,7 @@
 | 线路图         | React + SVG 连接线与原生按钮                                                      | 黑白窄栏、唯一活动蓝圈、悬停／聚焦标签；未引入自由画布或 React Flow          |
 | 产品主存储     | SQLite + better-sqlite3 13.0.3，WAL 与 FULL synchronous                           | 数据库版本 1；具名实体 JSON、运行事件和持久幂等记录，读取／写入均校验 schema |
 | 文件与数据目录 | 复制导入，SHA-256 不可变文件版本；默认 `~/Library/Application Support/MomentRead` | `MOMENTREAD_DATA_DIR` 可覆盖；原文件移动不改变书库副本                       |
-| AI 后端        | Claude Code CLI，当前实测 2.1.261                                                 | 唯一首版后端；复用其模型、工具循环和运行时处理，不自建通用 harness           |
+| AI 后端 | Claude Code 与 OpenCode 双适配器；设置内切换 | 按运行固定 provider、adapter、model；会话按 provider 隔离，不自建通用 harness |
 | 原著匹配       | CLI 独立候选发现 + 服务端独立正文取回 + 引句核对                                  | 候选、实际取回、选中及人工确认分别记录；搜索工具失败仍是放行阻塞             |
 | 书内 memory    | 独立讨论、冻结背景、确认小结与具体义项                                            | 不修改 Agent 全局记忆，同名义项不强制合并                                    |
 | 成果与恢复     | 按日期／时区构建报告、AI 总结、内联样式 HTML、ZIP 备份                            | HTML 不等于备份；恢复只允许空库，CLI 凭据与原始会话日志不在备份内            |
@@ -25,7 +25,16 @@ React、Hono、数据库等精确依赖以 [package.json](../package.json) 和�
 
 ThoughtDAG 提供了分支、背景截点及 Claude 协议参考，固定研究提交为 `3d63111dba182ece5d3c4c583ab1ac120d5276be`。产品按“一场讨论一个节点”重新实现，没有直接迁入其完整 store、任意文件访问、全局会话扫描或 bypass 权限模式。来源见[复用评估](research/thoughtdag-reuse.md)与 [Claude 模块](development/CLAUDE.md)。
 
-DeepSeek Harness、OpenCode、直接模型 API 和外部 chatbot 多网页都没有进入当前运行路径。更换后端或搜索服务需要明确的架构变更和重新验证，不静默 fallback。
+OpenCode 已进入讨论、小结与日报运行路径，原著匹配仅支持 Claude Code；选择 OpenCode 时首次解析直接进入中文讨论，显式匹配请求返回不支持。直接模型 API、DeepSeek Harness 和外部 chatbot 多网页未接入；不静默切换后端或搜索服务。
+
+| 能力 | Claude Code | OpenCode |
+|---|---|---|
+| 讨论、概念分支、结构化小结、日报 | 已接入 | 已接入 |
+| 明确会话接续与取消 | 已接入，按运行归属 | 已接入，按运行归属 |
+| 公开原著候选发现 | 已接入但真实工具能力仍未放行 | 不支持 |
+| 服务器独立取回 | 仅当前运行明确允许联网后执行 | 不启动匹配运行 |
+
+CLI 版本和真实调用证据见 [既有审查](development/REVIEW-2026-09-19.md)；本次修复与合成验证见 [后续修复](development/REVIEW-FOLLOWUP-2026-09-19.md)。
 
 ## 2. 运行结构与模块接口
 
@@ -43,7 +52,7 @@ flowchart TB
     Library[文件导入与备份恢复]
     Reports[日期报告与 HTML]
     Store[(SQLite 与文件目录)]
-    Adapter[Claude Code 适配层]
+    Adapter[Claude Code / OpenCode 适配层]
   end
   Reader <-->|受控文件与 CFI 事件| UI
   UI <-->|JSON 与运行事件| HTTP
@@ -56,7 +65,7 @@ flowchart TB
   Reports <--> Store
   Runs <--> Store
   Runs --> Adapter
-  Adapter <-->|stream-json| CLI[Claude Code CLI]
+  Adapter <-->|各自 JSON 事件协议| CLI[固定的 CLI 进程]
   CLI <--> Provider[已配置模型及网络工具]
   HTTP --> Matching
   Matching <--> Store
@@ -97,7 +106,7 @@ flowchart TB
 2. 普通追问接续明确映射的当前讨论会话；新概念建立新会话并传冻结背景。不能用“最近会话”或标题猜测归属。
 3. 同一讨论只允许一个生成任务；全局运行管理限制并发。同一 SSE 连接断开后按 seq 补读已保存事件，不能因此重新调用模型。
 4. 部分输出及最终消息始终写入发起运行的讨论；切换屏幕、书籍或节点不改变写入归属。启动恢复将未结束运行标为中断。
-5. 草稿和位置经服务端确认后才显示已保存；UI 去抖 500 ms，切换前排空保存队列。关闭时的 keepalive 仅为尽力提交，不当作成功证据。
+5. 每本书最多一个状态请求在途，刷新意图合并为一次后续读取；活动轮询等待请求完成后再计时，跨书及重新打开保留世代检查。草稿和位置经服务端确认后才显示已保存；UI 去抖 500 ms，切换前排空保存队列。关闭时的 keepalive 仅为尽力提交，不当作成功证据。
 6. CFI 不使用屏幕页数或模糊文字搜索替代。Reader 校验实际 DOM／spine／exact 往返；学习服务负责身份和范围语法，当前未对第三方 HTTP 客户端提供完整服务器 DOM 语义验证。
 7. 背景只包含用户选段、有限邻近文本、冻结祖先、当前讨论及相关确认记录。兄弟未确认全文不自动加入；超限有明确错误或匹配窗口截断标识。
 
@@ -107,9 +116,9 @@ flowchart TB
 
 Claude 每次运行由独立 `claude -p` 进程承载，使用 stream-json。适配器配置 safe mode、空 setting sources、严格空 MCP 和工具白名单；只从既有 settings.env 提取认证、endpoint 与模型映射键，进程环境优先。不会继承全局插件、hooks 或权限绕过设置。
 
-普通讨论、整理与日报不开放外部工具；matching 仅开放 WebSearch／WebFetch，网络请求转成界面权限事件。正常结果、结构化结果、工具失败与运行失败分别处理；退出码零不能替代符合契约的完整终态。取消先 SIGINT，超时强停，强停或取消会话不再接续。
+普通讨论、整理与日报不开放外部工具；matching 仅开放 WebSearch／WebFetch，网络请求转成界面权限事件。正常结果、结构化结果、工具失败与运行失败分别处理；退出码零不能替代符合契约的完整终态。取消由 RunManager 保存意图并覆盖完整生命周期：终止 CLI、取消 DNS／正文请求、阻止迟到来源提交和自动解析；CLI 内部先 SIGINT，超时强停。已生成部分讨论文字保留为中断，会话不再接续。成功终态已提交后的取消为无操作。
 
-原著匹配采用“候选发现 → 独立取回 → 字面核对 → 用户核对对应关系”。公开来源仅允许受检验的公网 HTTP(S) 文本，逐跳验证、限时和限体积；不用用户浏览器 Cookie。模型返回的引句必须真实存在于取回正文或指定原著文件版本中。即使文字存在，语言、底本版本及中文对应关系仍默认待核对。
+原著匹配采用“候选发现 → 独立取回 → 字面核对 → 用户核对对应关系”。默认未授权；RunManager 的本次联网决定由 CLI 和服务器共享，拒绝或未许可时服务器不发起取回，本地原著核对不受公网授权阻断。公开来源仅允许受检验的公网 HTTP(S) 文本，逐跳验证、限时和限体积；不用用户浏览器 Cookie。模型返回的引句必须真实存在于取回正文或指定原著文件版本中。即使文字存在，语言、底本版本及中文对应关系仍默认待核对。
 
 用户原著由本机书库复制保存，最多 5 个、每个 2,200 字符的窗口进入匹配上下文。当前窗口选择不能保证任意跨语种选段的定位质量；原著文件补充不是自动匹配准确率承诺。新来源保留历史，并提醒依赖讨论重新核对。
 
@@ -137,7 +146,7 @@ server/app.ts        HTTP／SSE 路由与服务组合
 server/runs.ts       运行并发、事件持久化和归属
 server/books/        文件版本、导入、备份与恢复
 server/storage/      SQLite schema 与快照
-server/ai/           Claude 子进程及协议
+server/ai/           Claude / OpenCode 子进程及各自协议
 server/learning/     冻结背景、讨论、版本化小结与义项
 server/matching/     来源发现任务、正文取回与核对
 server/exports/      日期报告与独立 HTML
@@ -148,4 +157,4 @@ prototype/           独立演示原型，保留视觉基线
 
 实施按 P0 契约与技术验证、P1 基础模块、P2 学习闭环、P3 持久化成果、P4 独立测试与盲测、P5 最终回归推进。当前模块代码已接线，类型检查、模块测试和独立 HTTP 测试已有记录；浏览器全流程、真实来源匹配和新用户盲测仍需分别放行。
 
-PRD A01–A21 是最终业务验收表；自动测试通过不自动勾选业务验收。不得以演示数据、合成 CLI fixture、截图或模块自测替代实际书籍与实际模型的系统验证。当前进展见 [开发清单](development/STATUS.md)、[系统测试](development/SYSTEM-TESTS.md)。无公开发布、Git push 或生产部署行为包含在本架构更新中。
+PRD A01–A21 是最终业务验收表；自动测试通过不自动勾选业务验收。不得以演示数据、合成 CLI fixture、截图或模块自测替代实际书籍与实际模型的系统验证。当前进展见 [开发清单](development/STATUS.md)、[系统测试](development/SYSTEM-TESTS.md)。CI 与标签发布共用 `verify.yml`，包含类型检查、单元／集成测试、构建与 Chromium 冒烟。发布依赖验证成功并 checkout 验证输出的同一提交；标签须与包版本一致。健康端点与设置界面读取 `shared/version.ts` 中的包版本。

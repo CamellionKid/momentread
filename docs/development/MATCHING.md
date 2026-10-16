@@ -7,7 +7,7 @@
 - `createMatchingService(store, library)` 返回契约中的 `MatchingService`。
 - `buildInput(discussionId)` 保存并返回 `ContextSnapshot`。根阅读选段合计最多 8,000 字符；超过时显式标记 `selectionTruncated`。不传递整段聊天或兄弟讨论。
 - `MATCHING_OUTPUT_SCHEMA` 可直接传给 Claude adapter 的 `outputSchema`。模型必须返回严格对象 `{"candidates":[{"url","title","language","version","quote","locator","reason"}]}`，最多 8 项；不接受 Markdown 包裹、额外键或空白引句。
-- `complete(discussionId, result)` 同时接受直接 JSON 对象／JSON 字符串，以及运行层的 `{result, toolResults}` 信封。每条候选独立取回验证后写入存储。
+- `complete(discussionId, result, lifecycle?)` 同时接受直接 JSON 对象／JSON 字符串，以及运行层的 `{result, toolResults}` 信封。每条候选独立取回验证后写入存储。`lifecycle` 由 RunManager 提供；公开网络必须显式 `allowRun`，缺省或拒绝均不取回；不能依据模型信封中的工具结果授予权限。取消信号传入 DNS、HTTP 和最终入库前检查，迟到结果不保存。
 - `updateSource(id, {selected, verification})` 选中不等于确认。尚未取回引句的记录不能选用或确认。变更会标记实际依赖来源的讨论与祖先 `needsMerge`，历史小结不改写。
 - `originalAdded(bookId, fileVersionId)` 必须在原著导入成功后调用。旧来源保留引句和证据指纹，改为待重新核对的 `conflict`；依赖讨论收到更新提示。再次匹配产生新来源记录。
 
@@ -19,6 +19,8 @@
 |---|---|---|
 | 正文实际取回，引句经 NFC 与空白规范化后逐字存在 | `retrieved / unverified`；保存引句、最终 URL、正文 SHA-256 | 正常完成，等待用户核对 |
 | 正文已取回，但引句不在此版本 | `unavailable / conflict`；引句与证据指纹为空 | 展示错误候选，不能选用 |
+| 未许可或拒绝联网 | `fetch_failed / unverified`；引句为空，说明未获许可 | 不访问公开来源；仍可核对已导入本地原著 |
+| 后处理期间取消 | 不保存迟到来源 | `cancelled`，不自动续行解析 |
 | HTTP、DNS、超时、格式或体积失败 | `fetch_failed / unverified`；引句为空 | 展示取回失败 |
 | 检索返回空数组 | 保存一条 `unavailable` 状态记录 | 明确“没有可核对候选”，不推断原著不存在 |
 | 运行层报告工具失败，且没有实际取回的引句 | 保留失败来源；空结果建立 `fetch_failed` 状态记录 | 抛 `MATCHING_TOOLS_UNAVAILABLE`；解析链可转为明确未对照原著的中文解析 |

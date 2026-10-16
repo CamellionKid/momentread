@@ -50,10 +50,18 @@ export function extractStructuredOutput(text: string): Record<string, unknown> |
   if (direct) return direct;
   const start = text.indexOf('{');
   if (start < 0) return undefined;
-  let depth = 0;
+  let depth = 0, inString = false, escaped = false;
   for (let index = start; index < text.length; index++) {
-    if (text[index] === '{') depth++;
-    if (text[index] === '}') { depth--; if (depth === 0) return attempt(text.slice(start, index + 1)); }
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '{') depth++;
+    else if (char === '}') { depth--; if (depth === 0) return attempt(text.slice(start, index + 1)); }
   }
   return undefined;
 }
@@ -118,6 +126,7 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
   const cwd = resolve(options.cwd || join(options.dataDir || process.env.MOMENTREAD_DATA_DIR || join(homedir(), 'Library/Application Support/MomentRead'), 'runtime/opencode'));
   if (!isAbsolute(cwd)) throw new AppError('CLI_CWD_INVALID', 'AI 运行目录必须是绝对路径。');
   const runs = new Map<string, Active>();
+  const starting = new Map<string, {request: StartRun; cancelled: boolean; ready: Promise<void>; resolve: () => void}>();
   let invocationVerified = false;
   let modelsCache: string[] | undefined;
   let binarySelection: ReturnType<typeof findBinary> | undefined;
@@ -211,23 +220,34 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
       return modelsCache;
     },
     async start(request: StartRun) {
-      if (runs.has(request.runId)) throw new AppError('RUN_CONFLICT', '这个运行已经启动。', 409);
-      if ([...runs.values()].some(state => state.request.discussionId === request.discussionId && state.request.bookId === request.bookId)) throw new AppError('RUN_CONFLICT', '当前讨论已有生成任务。', 409);
+      if (runs.has(request.runId) || starting.has(request.runId)) throw new AppError('RUN_CONFLICT', '这个运行已经启动。', 409);
+      if ([...runs.values(), ...starting.values()].some(state => state.request.discussionId === request.discussionId && state.request.bookId === request.bookId)) throw new AppError('RUN_CONFLICT', '当前讨论已有生成任务。', 409);
       if (request.purpose === 'matching') throw new AppError('MATCHING_UNSUPPORTED', '当前 AI 运行时不支持原著检索，请切换为 Claude Code 后重试。', 400);
       if (request.session.mode === 'resume' && !sessionIdPattern.test(request.session.cliSessionId)) throw new AppError('CLI_SESSION_INVALID', '会话标识无效，不能接续。');
+      let release!: () => void;
+      const pending = {request, cancelled: false, ready: new Promise<void>(resolve => {release = resolve}), resolve: release};
+      starting.set(request.runId, pending);
+      let attachment: string | undefined;
+      let spawned = false;
+      try {
       const binary = (await selectedBinary())?.path;
       if (!binary) throw new AppError('CLI_NOT_INSTALLED', '未找到可正常启动的 opencode，请按 README 检查安装。', 503);
       await ensureConfig();
       const model = request.model ?? options.model;
       const args = opencodeArguments(request, model, cwd);
       const input = opencodeInput(request);
-      let attachment: string | undefined;
       if (Buffer.byteLength(input) > argvLimit) {
         attachment = join(cwd, `input-${randomUUID()}.txt`);
         await writeFile(attachment, input, {mode: 0o600});
         args.push('-f', attachment, '附加文件是本次的完整输入，请严格依据其中内容作答。');
       } else args.push(input);
+      if (pending.cancelled) {
+        const events = new AsyncQueue<RunEvent>();
+        events.push({runId: request.runId, bookId: request.bookId, discussionId: request.discussionId, seq: 1, type: 'cancelled', data: {text: '', sessionReusable: false, forced: false}, createdAt: now()}); events.close();
+        return {runId: request.runId, events};
+      }
       const proc = spawn(binary, args, {cwd, env: environment(cwd), stdio: ['ignore', 'pipe', 'pipe']});
+      spawned = true;
       let resolveClose!: () => void;
       const state: Active = {request, proc, queue: new AsyncQueue(), seq: 0, sawFinish: false, cancelled: false, forced: false, closed: false, text: '', parts: new Map(), stderr: '', closePromise: new Promise(resolve => {resolveClose = resolve}), resolveClose};
       runs.set(request.runId, state);
@@ -245,8 +265,14 @@ export function createOpencodeAdapter(options: OpencodeAdapterOptions = {}): Cla
       });
       armDeadline(state, options.maxStartMs ?? options.maxRunMs ?? 300000);
       return {runId: request.runId, events: state.queue};
+      } finally {
+        try {if (attachment && !spawned) await rm(attachment, {force: true});}
+        finally {starting.delete(request.runId); pending.resolve();}
+      }
     },
     async cancel(runId: string) {
+      const pending = starting.get(runId);
+      if (pending) {pending.cancelled = true; await pending.ready;}
       const state = runs.get(runId);
       if (!state) return;
       state.cancelled = true; stop(state); await state.closePromise;

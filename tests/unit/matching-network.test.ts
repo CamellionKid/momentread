@@ -26,6 +26,29 @@ function setup(replies:Reply[]){
 }
 afterEach(()=>{vi.resetAllMocks();vi.useRealTimers();});
 describe('bounded source HTTP retrieval',()=>{
+  it('does not resolve DNS or open HTTP for an already cancelled run',async()=>{
+    const controller=new AbortController();controller.abort();
+    await expect(fetchPublicDocument('https://example.org/source',controller.signal)).rejects.toMatchObject({name:'AbortError'});
+    expect(mocks.lookup).not.toHaveBeenCalled();expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it('cancels stalled DNS and ignores its late fake-IP answer',async()=>{
+    let release!:(value:Array<{address:string;family:number}>)=>void;
+    mocks.lookup.mockImplementation(()=>new Promise(resolve=>{release=resolve;}));
+    const controller=new AbortController();
+    const pending=expect(fetchPublicDocument('https://example.org/source',controller.signal)).rejects.toMatchObject({name:'AbortError'});
+    controller.abort();await pending;
+    release([{address:'198.18.2.3',family:4}]);await Promise.resolve();
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it.each(['8.8.8.8','198.18.2.3'])('destroys a stalled HTTP request after %s DNS on cancellation',async address=>{
+    mocks.lookup.mockResolvedValue([{address,family:4}]);
+    const controller=new AbortController();
+    const request=new EventEmitter() as EventEmitter&{end:()=>void;destroy:(error:Error)=>void};
+    request.end=()=>controller.abort();request.destroy=vi.fn(error=>{request.emit('error',error);request.emit('close');});
+    mocks.request.mockReturnValue(request);
+    await expect(fetchPublicDocument('https://example.org/source',controller.signal)).rejects.toMatchObject({name:'AbortError'});
+    expect(request.destroy).toHaveBeenCalledTimes(1);expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
   it('pins DNS, strips scripts, and extracts the actual body',async()=>{
     setup([{body:'<p>Actual source &amp; evidence.</p><script>fabricated quote</script>'}]);
     expect(await fetchPublicDocument('https://example.org/chapter')).toEqual({url:'https://example.org/chapter',contentType:'text/html;charset=utf-8',text:'Actual source & evidence.'});

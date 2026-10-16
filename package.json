@@ -18,12 +18,14 @@
     "test:contract": "vitest run tests/contract",
     "test:live": "tsx scripts/claude-probe.ts --live",
     "test:live:opencode": "tsx scripts/opencode-probe.ts --live",
-    "contracts": "tsx scripts/openapi.ts"
+    "contracts": "tsx scripts/openapi.ts",
+    "test:browser": "tsx tests/browser/smoke.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
     "@phosphor-icons/react": "2.1.10",
     "better-sqlite3": "13.0.3",
+    "busboy": "1.6.0",
     "fast-xml-parser": "5.11.1",
     "fflate": "0.8.3",
     "hono": "4.13.7",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
+    "@types/busboy": "1.5.4",
     "@types/jsdom": "30.0.0",
     "@types/node": "22.20.2",
     "@types/react": "19.3.0",
